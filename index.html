@@ -530,4 +530,300 @@
             if (!clientId) return;
             
             try {
-                const response = await fetch('/api/
+                const response = await fetch('/api/update-smc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        smc_confidence: parseFloat(document.getElementById('smcConfidence').value),
+                        virgin_breaker: document.getElementById('virginBreaker').checked,
+                        liquidity_sweep: document.getElementById('liquiditySweep').checked
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('✅ SMC settings saved', 'success');
+                    showTab(6);
+                }
+            } catch (error) {
+                showNotification(`❌ Failed to save SMC settings: ${error.message}`, 'error');
+            }
+        }
+        
+        // Analyze market
+        async function analyzeMarket() {
+            if (!clientId) {
+                showNotification('Please connect first', 'error');
+                return;
+            }
+            
+            const symbol = document.getElementById('tradeSymbol').value;
+            const btn = document.getElementById('analyzeBtn');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ANALYZING...';
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        symbol: symbol
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.signal) {
+                    showSignal(data.signal);
+                } else {
+                    showNotification('No SMC setup found', 'info');
+                }
+            } catch (error) {
+                showNotification(`❌ Analysis failed: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search"></i> ANALYZE WITH SMC';
+            }
+        }
+        
+        // Show signal
+        function showSignal(signal) {
+            currentSignal = signal;
+            
+            document.getElementById('signalSymbol').textContent = signal.symbol;
+            document.getElementById('signalDirection').textContent = signal.direction.toUpperCase();
+            document.getElementById('signalDirection').style.background = signal.direction === 'buy' ? 'var(--green)' : 'var(--red)';
+            document.getElementById('signalEntry').textContent = signal.entry_price;
+            document.getElementById('signalSL').textContent = signal.stop_loss;
+            document.getElementById('signalTP').textContent = signal.take_profit;
+            document.getElementById('signalConfidence').textContent = `${signal.confidence}%`;
+            
+            document.getElementById('signalContainer').style.display = 'block';
+            showNotification(`📊 ${signal.symbol} ${signal.direction.toUpperCase()} signal found (${signal.confidence}% confidence)`);
+        }
+        
+        // Execute trade
+        async function executeTrade() {
+            if (!currentSignal) return;
+            
+            try {
+                const response = await fetch('/api/trade', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        signal: currentSignal
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('✅ Trade executed successfully!', 'success');
+                    document.getElementById('signalContainer').style.display = 'none';
+                    currentSignal = null;
+                    loadTrades();
+                } else {
+                    showNotification(`❌ Trade failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`❌ Trade execution error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load trades
+        async function loadTrades() {
+            if (!clientId) return;
+            
+            try {
+                const response = await fetch(`/api/trades/${clientId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateTrades(data.trades);
+                }
+            } catch (error) {
+                console.error('Failed to load trades:', error);
+            }
+        }
+        
+        function updateTrades(tradesData) {
+            const list = document.getElementById('tradesList');
+            const openTrades = document.getElementById('openTrades');
+            
+            if (!tradesData.open_trades.length) {
+                list.innerHTML = '<div style="text-align: center; padding: 30px; color: var(--gold-light);">No open trades</div>';
+                openTrades.textContent = '0';
+                return;
+            }
+            
+            openTrades.textContent = tradesData.open_trades.length;
+            list.innerHTML = '';
+            
+            tradesData.open_trades.forEach(trade => {
+                const div = document.createElement('div');
+                div.style.cssText = `
+                    padding: 15px; 
+                    background: var(--dark-bg); 
+                    border-radius: 12px; 
+                    margin-bottom: 10px;
+                    border-left: 4px solid ${trade.direction === 'buy' ? 'var(--green)' : 'var(--red)'};
+                `;
+                
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between;">
+                        <div style="font-weight: bold; font-size: 18px;">${trade.symbol}</div>
+                        <div style="padding: 5px 10px; background: ${trade.direction === 'buy' ? 'rgba(0,255,0,0.1)' : 'rgba(255,0,0,0.1)'}; 
+                             color: ${trade.direction === 'buy' ? 'var(--green)' : 'var(--red)'}; border-radius: 10px;">
+                            ${trade.direction.toUpperCase()}
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 14px;">
+                        <div>Entry: ${trade.entry_price}</div>
+                        <div>Amount: $${trade.amount}</div>
+                        <div>SL: ${trade.stop_loss}</div>
+                        <div>TP: ${trade.take_profit}</div>
+                    </div>
+                    <button onclick="closeTrade('${trade.trade_id}')" style="width: 100%; padding: 10px; margin-top: 10px; 
+                           background: var(--red); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        Close Trade
+                    </button>
+                `;
+                
+                list.appendChild(div);
+            });
+        }
+        
+        // Close trade
+        async function closeTrade(tradeId) {
+            if (!clientId) return;
+            
+            try {
+                const response = await fetch('/api/close-trade', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        trade_id: tradeId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`✅ Trade closed: $${data.profit.toFixed(2)}`, 'success');
+                    loadTrades();
+                }
+            } catch (error) {
+                showNotification(`❌ Failed to close trade: ${error.message}`, 'error');
+            }
+        }
+        
+        // WebSocket
+        function connectWebSocket() {
+            if (!clientId) return;
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            ws = new WebSocket(`${protocol}//${host}/ws/${clientId}`);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus(true);
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus(false);
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'analysis':
+                    if (data.signal) showSignal(data.signal);
+                    break;
+                case 'trade_result':
+                    if (data.result.success) {
+                        showNotification('✅ Trade executed!', 'success');
+                        loadTrades();
+                    }
+                    break;
+                case 'trades':
+                    updateTrades(data.trades);
+                    break;
+            }
+        }
+        
+        // UI Helpers
+        function updateStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const statusDiv = document.getElementById('connectionStatus');
+            
+            if (connected) {
+                dot.style.color = 'var(--green)';
+                text.textContent = 'Connected';
+                if (statusDiv) {
+                    statusDiv.innerHTML = '<i class="fas fa-check-circle" style="color: var(--green);"></i> Connected to Deriv';
+                    statusDiv.style.background = 'rgba(0,255,0,0.1)';
+                }
+            } else {
+                dot.style.color = 'var(--red)';
+                text.textContent = 'Disconnected';
+                if (statusDiv) {
+                    statusDiv.innerHTML = '<i class="fas fa-times-circle" style="color: var(--red);"></i> Not connected';
+                    statusDiv.style.background = 'rgba(255,0,0,0.1)';
+                }
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initMarkets();
+            
+            // Update time
+            setInterval(() => {
+                document.getElementById('currentTime').textContent = 
+                    new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }, 1000);
+            
+            // SMC confidence slider
+            document.getElementById('smcConfidence').addEventListener('input', function() {
+                document.getElementById('confidenceValue').textContent = this.value + '%';
+            });
+        });
+        
+        // Make functions global
+        window.showTab = showTab;
+        window.connectToDeriv = connectToDeriv;
+        window.selectAccount = selectAccount;
+        window.saveMarketSettings = saveMarketSettings;
+        window.saveTradingSettings = saveTradingSettings;
+        window.saveSMCSettings = saveSMCSettings;
+        window.analyzeMarket = analyzeMarket;
+        window.executeTrade = executeTrade;
+        window.closeTrade = closeTrade;
+    </script>
+</body>
+</html>
