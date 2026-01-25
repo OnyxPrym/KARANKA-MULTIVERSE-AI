@@ -1,9 +1,11 @@
 [build]
 builder = "nixpacks"
 
+[build.args]
+PYTHON_VERSION = "3.9"  # Changed from 3.11 to 3.9
+
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 
 [variables]
 DERIV_APP_ID = "1089"
-REDIRECT_URI = "https://karanka-multiverse-ai.railway.app/callback"
