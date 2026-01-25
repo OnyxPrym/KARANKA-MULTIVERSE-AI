@@ -1,0 +1,9 @@
+[service]
+name = "karanka-multiverse-ai"
+port = 8000
+
+[variables]
+DERIV_APP_ID = "1089"
+REDIRECT_URI = "https://karanka-multiverse-ai.railway.app/callback"
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
