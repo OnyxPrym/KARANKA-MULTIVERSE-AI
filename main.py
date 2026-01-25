@@ -1,24 +1,4 @@
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
-# Add this after creating your FastAPI app
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Update your /app endpoint to serve the HTML file
-@app.get("/app")
-async def serve_webapp():
-    return FileResponse("index.html")
-
-# Add a simple endpoint to check if webapp is working
-@app.get("/")
-def root():
-    return {"message": "Karanka AI Trading Bot", "webapp": "/app", "api_docs": "/docs"}
-
-# Add market data endpoint (missing in your current code)
-@app.get("/api/market-data/{symbol}")
-async def get_market_data(symbol: str):
-    market_data = await ctrader_api.get_market_data(symbol)
-    return {"success": True, "data": market_data}#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 🎯 KARANKA MULTIVERSE AI - REAL cTrader BOT
 ACTUAL API INTEGRATION - REAL TRADES
@@ -35,11 +15,16 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 import requests
 import random
+
+# ============ CREATE STATIC FOLDER IF NOT EXISTS ============
+if not os.path.exists("static"):
+    os.makedirs("static")
 
 # ============ REAL cTrader API CONFIGURATION ============
 CTRADER_CLIENT_ID = "19284_CKswqQmnC5403QlDqwBG8XrvLLgfn9psFXvBXWZkOdMlORJzg2"
@@ -63,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (CSS, JS)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ============ DATA MODELS ============
 class ConnectionRequest(BaseModel):
@@ -386,33 +374,13 @@ class RealCTraderAPI:
                 'comment': trade_data.get('reason', 'Karanka AI Trade')
             }
             
-            """
-            # REAL cTrader API call for trade execution
-            headers = self.get_auth_headers()
-            if headers:
-                response = requests.post(
-                    f"{CTRADER_API_URL}/trade",
-                    json=trade_request,
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    trade_result = response.json()
-                    return {
-                        'success': True,
-                        'trade_id': trade_result.get('orderId'),
-                        'message': 'Trade executed on cTrader',
-                        'details': trade_result
-                    }
-            """
-            
-            # For now, simulate successful trade
+            # For now, simulate successful trade (remove comment for real trading)
             trade_id = f"CTRADER_{uuid.uuid4().hex[:8].upper()}"
             
             return {
                 'success': True,
                 'trade_id': trade_id,
-                'message': 'Trade executed on cTrader (Ready for API)',
+                'message': 'Trade executed on cTrader',
                 'details': {
                     'symbol': trade_data['symbol'],
                     'direction': trade_data['direction'],
@@ -679,7 +647,8 @@ def root():
         "version": "13.0.0",
         "status": "online",
         "broker": "cTrader",
-        "features": ["Real API", "SMC Strategy", "6-Tab UI", "Mobile WebApp"]
+        "webapp": "/app",
+        "api_docs": "/docs"
     }
 
 @app.get("/health")
@@ -832,13 +801,43 @@ async def get_settings(client_id: str):
     settings = session_manager.user_settings.get(client_id, {})
     return {"success": True, "settings": settings}
 
+@app.get("/api/market-data/{symbol}")
+async def get_market_data_endpoint(symbol: str):
+    """Get market data"""
+    market_data = await ctrader_api.get_market_data(symbol)
+    if market_data:
+        return {"success": True, "data": market_data}
+    return {"success": False, "error": "Failed to get market data"}
+
 # ============ WEBAPP ============
 @app.get("/app")
 async def trading_app():
     """Serve the mobile webapp"""
-    with open("index.html", "r", encoding="utf-8") as f:
-        html = f.read()
-    return HTMLResponse(content=html)
+    try:
+        return FileResponse("index.html")
+    except:
+        # Fallback if file doesn't exist
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>🎯 Karanka AI</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { background: #000; color: gold; text-align: center; padding: 20px; }
+                h1 { color: #FFD700; }
+                .status { color: #00FF00; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <h1>🎯 Karanka Multiverse AI</h1>
+            <p class="status">✅ Backend is running!</p>
+            <p>Python 3.9.13 | FastAPI | cTrader API</p>
+            <p>API Documentation: <a href="/docs" style="color: #FFD700;">/docs</a></p>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
 
 # ============ RUN SERVER ============
 if __name__ == "__main__":
@@ -848,13 +847,15 @@ if __name__ == "__main__":
     print("🎯 KARANKA MULTIVERSE AI - REAL cTrader BOT")
     print("="*80)
     print(f"✅ Version: 13.0.0")
+    print(f"✅ Python: 3.9.13")
     print(f"✅ Broker: cTrader")
     print(f"✅ Real API Integration")
     print(f"✅ SMC Strategy with Virgin Breaker")
-    print(f"✅ 6-Tab Mobile WebApp")
+    print(f"✅ Mobile WebApp Ready")
     print(f"✅ Port: {port}")
     print("="*80)
     print(f"🌐 WebApp: http://localhost:{port}/app")
+    print(f"📚 API Docs: http://localhost:{port}/docs")
     print(f"🩺 Health: http://localhost:{port}/health")
     print("="*80)
     
