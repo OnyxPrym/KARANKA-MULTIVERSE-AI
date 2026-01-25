@@ -1,618 +1,214 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎯 Karanka Multiverse AI</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* Add inline styles for simplicity */
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .market-item {
-            padding: 15px;
-            background: #0A0A0A;
-            border-radius: 10px;
-            margin: 5px;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
-        .market-item.selected {
-            border-color: #FFD700;
-            background: rgba(255, 215, 0, 0.1);
-        }
-        .account-item {
-            padding: 15px;
-            background: #0A0A0A;
-            border-radius: 10px;
-            margin: 10px 0;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
-        .account-item.selected {
-            border-color: #FFD700;
-        }
-        .signal-card {
-            background: rgba(0, 100, 0, 0.1);
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            border: 2px solid #00FF00;
-        }
-    </style>
-</head>
-<body>
-    <!-- Header -->
-    <div class="header">
-        <h1 style="color: #FFD700; margin: 0;">🎯 KARANKA MULTIVERSE AI</h1>
-        <div style="color: #FFF8DC; font-size: 14px;">Real Deriv Trading Bot</div>
-    </div>
-    
-    <!-- 6 Tabs -->
-    <div class="tabs">
-        <button class="tab active" onclick="showTab(1)"><i class="fas fa-link"></i><br>Connect</button>
-        <button class="tab" onclick="showTab(2)"><i class="fas fa-wallet"></i><br>Account</button>
-        <button class="tab" onclick="showTab(3)"><i class="fas fa-chart-line"></i><br>Markets</button>
-        <button class="tab" onclick="showTab(4)"><i class="fas fa-cogs"></i><br>Settings</button>
-        <button class="tab" onclick="showTab(5)"><i class="fas fa-search"></i><br>SMC</button>
-        <button class="tab" onclick="showTab(6)"><i class="fas fa-rocket"></i><br>Trade</button>
-    </div>
-    
-    <!-- Content -->
-    <div class="content">
-        <!-- Tab 1: Connect -->
-        <div class="tab-content active" id="tab-1">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-link"></i> CONNECT TO DERIV</h2>
-                <input type="password" id="apiToken" placeholder="Your Deriv API Token">
-                <input type="number" id="investmentAmount" value="0.35" min="0.35" step="0.01" placeholder="Investment Amount ($)">
-                <button onclick="connectToDeriv()" id="connectBtn">
-                    <i class="fas fa-plug"></i> CONNECT
-                </button>
-                <div id="connectionStatus" style="margin-top: 20px; padding: 10px; border-radius: 10px; background: rgba(255,0,0,0.1); text-align: center;">
-                    <i class="fas fa-times-circle" style="color: #FF0000;"></i> Not connected
-                </div>
-            </div>
-        </div>
-        
-        <!-- Tab 2: Account -->
-        <div class="tab-content" id="tab-2">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-wallet"></i> SELECT ACCOUNT</h2>
-                <div id="accountList"></div>
-                <button onclick="selectAccount()" id="selectAccountBtn" disabled>
-                    <i class="fas fa-check-circle"></i> SELECT ACCOUNT
-                </button>
-            </div>
-        </div>
-        
-        <!-- Tab 3: Markets -->
-        <div class="tab-content" id="tab-3">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-chart-line"></i> SELECT MARKETS</h2>
-                <div id="marketGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;"></div>
-                <button onclick="saveMarkets()" style="margin-top: 20px;">
-                    <i class="fas fa-save"></i> SAVE MARKETS
-                </button>
-            </div>
-        </div>
-        
-        <!-- Tab 4: Settings -->
-        <div class="tab-content" id="tab-4">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-cogs"></i> TRADING SETTINGS</h2>
-                <input type="number" id="maxConcurrent" value="3" min="1" max="10" placeholder="Max Concurrent Trades">
-                <input type="number" id="maxDaily" value="10" min="1" max="50" placeholder="Max Daily Trades">
-                <input type="number" id="stopLoss" value="20" min="5" max="100" placeholder="Stop Loss (pips)">
-                <input type="number" id="takeProfit" value="40" min="10" max="200" placeholder="Take Profit (pips)">
-                <button onclick="saveSettings()">
-                    <i class="fas fa-save"></i> SAVE SETTINGS
-                </button>
-            </div>
-        </div>
-        
-        <!-- Tab 5: SMC -->
-        <div class="tab-content" id="tab-5">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-search"></i> SMC SETTINGS</h2>
-                <input type="range" id="confidence" min="50" max="95" value="75" style="width: 100%;">
-                <div style="text-align: center; font-size: 24px; color: #FFD700;" id="confidenceValue">75%</div>
-                <label style="display: block; margin: 15px 0;">
-                    <input type="checkbox" id="virginBreaker" checked> Virgin Breaker
-                </label>
-                <button onclick="saveSMC()">
-                    <i class="fas fa-save"></i> SAVE SMC SETTINGS
-                </button>
-            </div>
-        </div>
-        
-        <!-- Tab 6: Trading -->
-        <div class="tab-content" id="tab-6">
-            <div class="card">
-                <h2 style="color: #FFD700;"><i class="fas fa-rocket"></i> TRADING PANEL</h2>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0;">
-                    <div style="background: #0A0A0A; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: #FFF8DC;">BALANCE</div>
-                        <div style="font-size: 24px; color: #FFD700;" id="balance">$0.00</div>
-                    </div>
-                    <div style="background: #0A0A0A; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 12px; color: #FFF8DC;">OPEN TRADES</div>
-                        <div style="font-size: 24px; color: #FFD700;" id="openTrades">0</div>
-                    </div>
-                </div>
-                
-                <select id="tradeSymbol">
-                    <option value="EURUSD">EUR/USD</option>
-                    <option value="GBPUSD">GBP/USD</option>
-                    <option value="USDJPY">USD/JPY</option>
-                    <option value="XAUUSD">GOLD</option>
-                    <option value="BTCUSD">BITCOIN</option>
-                </select>
-                
-                <button onclick="analyzeMarket()" id="analyzeBtn">
-                    <i class="fas fa-search"></i> ANALYZE MARKET
-                </button>
-                
-                <div id="signalContainer" style="display: none;">
-                    <div class="signal-card">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div style="font-size: 20px; font-weight: bold;" id="signalSymbol">EURUSD</div>
-                            <div style="padding: 5px 15px; background: #00FF00; color: black; border-radius: 20px;" id="signalDirection">BUY</div>
-                        </div>
-                        <div style="margin: 15px 0;">
-                            <div>Entry: <span id="signalEntry">1.08500</span></div>
-                            <div>Stop Loss: <span id="signalSL">1.08300</span></div>
-                            <div>Take Profit: <span id="signalTP">1.08800</span></div>
-                            <div>Confidence: <span id="signalConfidence">75%</span></div>
-                        </div>
-                        <button class="btn-success" onclick="executeTrade()">
-                            <i class="fas fa-bolt"></i> EXECUTE TRADE
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="tradesList" style="margin-top: 20px;"></div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Status Bar -->
-    <div class="status-bar">
-        <div>
-            <span id="statusDot" style="color: #FF0000;">●</span>
-            <span id="statusText">Disconnected</span>
-        </div>
-        <div id="currentTime">--:--</div>
-    </div>
-    
-    <!-- JavaScript -->
-    <script>
-        let clientId = null;
-        let selectedAccount = null;
-        let currentSignal = null;
-        
-        // Show tab
-        function showTab(tabNum) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(`tab-${tabNum}`).classList.add('active');
-            document.querySelectorAll('.tab')[tabNum-1].classList.add('active');
-            
-            if (tabNum === 2 && clientId) loadAccounts();
-            if (tabNum === 3) initMarkets();
-            if (tabNum === 6 && clientId) loadTrades();
-        }
-        
-        // Connect to Deriv
-        async function connectToDeriv() {
-            const token = document.getElementById('apiToken').value;
-            const amount = parseFloat(document.getElementById('investmentAmount').value);
-            
-            if (!token) {
-                alert('Please enter API token');
-                return;
-            }
-            
-            if (amount < 0.35) {
-                alert('Minimum investment is $0.35');
-                return;
-            }
-            
-            const btn = document.getElementById('connectBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CONNECTING...';
-            
-            try {
-                const response = await fetch('/api/connect', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        api_token: token,
-                        investment_amount: amount
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    clientId = data.client_id;
-                    updateStatus(true);
-                    alert('✅ Connected successfully!');
-                    showTab(2);
-                } else {
-                    throw new Error(data.message || 'Connection failed');
-                }
-            } catch (error) {
-                alert('❌ Connection failed: ' + error.message);
-                updateStatus(false);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-plug"></i> CONNECT';
-            }
-        }
-        
-        // Load accounts
-        async function loadAccounts() {
-            const list = document.getElementById('accountList');
-            list.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-            
-            try {
-                const response = await fetch(`/api/accounts/${clientId}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    list.innerHTML = '';
-                    data.accounts.forEach(account => {
-                        const div = document.createElement('div');
-                        div.className = 'account-item';
-                        div.innerHTML = `
-                            <div style="display: flex; align-items: center;">
-                                <div style="font-size: 30px; margin-right: 15px;">${account.icon}</div>
-                                <div>
-                                    <div style="font-weight: bold;">${account.name}</div>
-                                    <div style="font-size: 12px; color: #FFF8DC;">
-                                        Balance: $${account.balance.toFixed(2)} | ${account.type}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        div.onclick = () => {
-                            document.querySelectorAll('.account-item').forEach(item => item.classList.remove('selected'));
-                            div.classList.add('selected');
-                            selectedAccount = account;
-                            document.getElementById('selectAccountBtn').disabled = false;
-                        };
-                        list.appendChild(div);
-                    });
-                }
-            } catch (error) {
-                list.innerHTML = '<div style="color: #FF0000; text-align: center;">Failed to load accounts</div>';
-            }
-        }
-        
-        // Select account
-        async function selectAccount() {
-            if (!selectedAccount) return;
-            
-            try {
-                const response = await fetch('/api/select-account', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        account_id: selectedAccount.account_id
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Account selected!');
-                    document.getElementById('balance').textContent = `$${selectedAccount.balance.toFixed(2)}`;
-                    showTab(3);
-                }
-            } catch (error) {
-                alert('❌ Failed to select account: ' + error.message);
-            }
-        }
-        
-        // Initialize markets
-        function initMarkets() {
-            const markets = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD'];
-            const grid = document.getElementById('marketGrid');
-            grid.innerHTML = '';
-            
-            markets.forEach(symbol => {
-                const div = document.createElement('div');
-                div.className = 'market-item';
-                div.innerHTML = `
-                    <div style="font-weight: bold; text-align: center;">${symbol}</div>
-                    <div style="font-size: 12px; text-align: center; color: #FFF8DC;">${symbol === 'EURUSD' ? 'Euro/USD' : 
-                       symbol === 'GBPUSD' ? 'Pound/USD' : 
-                       symbol === 'USDJPY' ? 'USD/Yen' : 
-                       symbol === 'XAUUSD' ? 'Gold' : 'Bitcoin'}</div>
-                `;
-                div.onclick = () => {
-                    div.classList.toggle('selected');
-                };
-                grid.appendChild(div);
-            });
-        }
-        
-        // Save markets
-        async function saveMarkets() {
-            const selected = Array.from(document.querySelectorAll('.market-item.selected'))
-                .map(item => item.querySelector('div:first-child').textContent);
-            
-            try {
-                const response = await fetch('/api/update-markets', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        selected_markets: selected
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Markets saved!');
-                    showTab(4);
-                }
-            } catch (error) {
-                alert('❌ Failed to save markets');
-            }
-        }
-        
-        // Save settings
-        async function saveSettings() {
-            try {
-                const response = await fetch('/api/update-rules', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        max_concurrent_trades: parseInt(document.getElementById('maxConcurrent').value),
-                        max_daily_trades: parseInt(document.getElementById('maxDaily').value),
-                        stop_loss_pips: parseFloat(document.getElementById('stopLoss').value),
-                        take_profit_pips: parseFloat(document.getElementById('takeProfit').value)
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Settings saved!');
-                    showTab(5);
-                }
-            } catch (error) {
-                alert('❌ Failed to save settings');
-            }
-        }
-        
-        // Save SMC
-        async function saveSMC() {
-            try {
-                const response = await fetch('/api/update-smc', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        smc_confidence: parseFloat(document.getElementById('confidence').value),
-                        virgin_breaker: document.getElementById('virginBreaker').checked
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ SMC settings saved!');
-                    showTab(6);
-                }
-            } catch (error) {
-                alert('❌ Failed to save SMC settings');
-            }
-        }
-        
-        // Analyze market
-        async function analyzeMarket() {
-            const symbol = document.getElementById('tradeSymbol').value;
-            const btn = document.getElementById('analyzeBtn');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ANALYZING...';
-            
-            try {
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        symbol: symbol
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.signal) {
-                    showSignal(data.signal);
-                } else {
-                    alert('No SMC setup found');
-                }
-            } catch (error) {
-                alert('Analysis failed: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-search"></i> ANALYZE MARKET';
-            }
-        }
-        
-        // Show signal
-        function showSignal(signal) {
-            currentSignal = signal;
-            
-            document.getElementById('signalSymbol').textContent = signal.symbol;
-            document.getElementById('signalDirection').textContent = signal.direction.toUpperCase();
-            document.getElementById('signalDirection').style.background = signal.direction === 'buy' ? '#00FF00' : '#FF0000';
-            document.getElementById('signalEntry').textContent = signal.entry_price;
-            document.getElementById('signalSL').textContent = signal.stop_loss;
-            document.getElementById('signalTP').textContent = signal.take_profit;
-            document.getElementById('signalConfidence').textContent = signal.confidence + '%';
-            
-            document.getElementById('signalContainer').style.display = 'block';
-        }
-        
-        // Execute trade
-        async function executeTrade() {
-            if (!currentSignal) return;
-            
-            try {
-                const response = await fetch('/api/trade', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        signal: currentSignal
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Trade executed!');
-                    document.getElementById('signalContainer').style.display = 'none';
-                    loadTrades();
-                } else {
-                    alert('❌ Trade failed: ' + data.error);
-                }
-            } catch (error) {
-                alert('Trade execution error: ' + error.message);
-            }
-        }
-        
-        // Load trades
-        async function loadTrades() {
-            try {
-                const response = await fetch(`/api/trades/${clientId}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateTrades(data.trades);
-                }
-            } catch (error) {
-                console.error('Failed to load trades:', error);
-            }
-        }
-        
-        function updateTrades(trades) {
-            const list = document.getElementById('tradesList');
-            const openCount = document.getElementById('openTrades');
-            
-            if (!trades.open || trades.open.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: #FFF8DC; padding: 20px;">No open trades</div>';
-                openCount.textContent = '0';
-                return;
-            }
-            
-            openCount.textContent = trades.open.length;
-            list.innerHTML = '<h3 style="color: #FFD700;">OPEN TRADES</h3>';
-            
-            trades.open.forEach(trade => {
-                const div = document.createElement('div');
-                div.style.cssText = `
-                    background: #0A0A0A;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 10px 0;
-                    border-left: 4px solid ${trade.direction === 'buy' ? '#00FF00' : '#FF0000'};
-                `;
-                
-                div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <div style="font-weight: bold;">${trade.symbol}</div>
-                        <div style="color: ${trade.direction === 'buy' ? '#00FF00' : '#FF0000'}">
-                            ${trade.direction.toUpperCase()}
-                        </div>
-                    </div>
-                    <div style="font-size: 14px; margin-top: 10px;">
-                        <div>Amount: $${trade.amount}</div>
-                        <div>Entry: ${trade.entry_price}</div>
-                        <div>SL: ${trade.stop_loss} | TP: ${trade.take_profit}</div>
-                    </div>
-                    <button onclick="closeTrade('${trade.trade_id}')" style="width: 100%; padding: 10px; margin-top: 10px;
-                           background: #FF0000; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Close Trade
-                    </button>
-                `;
-                
-                list.appendChild(div);
-            });
-        }
-        
-        // Close trade
-        async function closeTrade(tradeId) {
-            try {
-                const response = await fetch('/api/close-trade', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        trade_id: tradeId
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert(`✅ Trade closed! Profit: $${data.profit.toFixed(2)}`);
-                    loadTrades();
-                }
-            } catch (error) {
-                alert('Failed to close trade: ' + error.message);
-            }
-        }
-        
-        // Update status
-        function updateStatus(connected) {
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('statusText');
-            const statusDiv = document.getElementById('connectionStatus');
-            
-            if (connected) {
-                dot.style.color = '#00FF00';
-                text.textContent = 'Connected';
-                if (statusDiv) {
-                    statusDiv.innerHTML = '<i class="fas fa-check-circle" style="color: #00FF00;"></i> Connected';
-                    statusDiv.style.background = 'rgba(0,255,0,0.1)';
-                }
-            } else {
-                dot.style.color = '#FF0000';
-                text.textContent = 'Disconnected';
-                if (statusDiv) {
-                    statusDiv.innerHTML = '<i class="fas fa-times-circle" style="color: #FF0000;"></i> Not connected';
-                    statusDiv.style.background = 'rgba(255,0,0,0.1)';
-                }
-            }
-        }
-        
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            initMarkets();
-            
-            // Confidence slider
-            document.getElementById('confidence').addEventListener('input', function() {
-                document.getElementById('confidenceValue').textContent = this.value + '%';
-            });
-            
-            // Update time
-            setInterval(() => {
-                document.getElementById('currentTime').textContent = 
-                    new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            }, 1000);
-        });
-    </script>
-</body>
-</html>
+/* BLACK & GOLD THEME */
+:root {
+    --black: #000000;
+    --dark-bg: #0A0A0A;
+    --card-bg: #111111;
+    --border: #333333;
+    --gold: #FFD700;
+    --gold-light: #FFF8DC;
+    --gold-dark: #B8860B;
+    --green: #00FF00;
+    --red: #FF0000;
+    --text: #FFFFFF;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: var(--black);
+    color: var(--text);
+    min-height: 100vh;
+}
+
+/* Header */
+.header {
+    background: var(--dark-bg);
+    padding: 20px;
+    text-align: center;
+    border-bottom: 3px solid var(--gold);
+}
+
+.header h1 {
+    color: var(--gold);
+    margin-bottom: 5px;
+}
+
+/* Tabs */
+.tabs-container {
+    background: var(--dark-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.tabs {
+    display: flex;
+    overflow-x: auto;
+    padding: 10px;
+}
+
+.tab {
+    flex: 1;
+    min-width: 70px;
+    padding: 15px 5px;
+    background: transparent;
+    color: var(--gold-light);
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 20px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+}
+
+.tab-label {
+    font-size: 10px;
+    margin-top: 5px;
+    display: block;
+}
+
+/* Content */
+.content {
+    padding: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Cards */
+.card {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.card-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 215, 0, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 1px solid var(--gold);
+}
+
+/* Forms */
+input, select, button {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--dark-bg);
+    color: var(--text);
+    font-size: 16px;
+}
+
+button {
+    background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+    color: var(--black);
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #006400, var(--green));
+    color: white;
+}
+
+/* Market Grid */
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.market-item {
+    padding: 15px;
+    background: var(--dark-bg);
+    border-radius: 10px;
+    text-align: center;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.market-item.selected {
+    border-color: var(--gold);
+    background: rgba(255, 215, 0, 0.1);
+}
+
+/* Account List */
+.account-item {
+    padding: 15px;
+    background: var(--dark-bg);
+    border-radius: 10px;
+    margin: 10px 0;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.account-item.selected {
+    border-color: var(--gold);
+}
+
+/* Signal Card */
+.signal-card {
+    background: rgba(0, 100, 0, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    border: 2px solid var(--green);
+}
+
+/* Status Bar */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--dark-bg);
+    padding: 15px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .header { padding: 15px; }
+    .content { padding: 15px; }
+    .card { padding: 15px; }
+    .market-grid { grid-template-columns: 1fr; }
+}
