@@ -1,4 +1,24 @@
-#!/usr/bin/env python3
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Add this after creating your FastAPI app
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Update your /app endpoint to serve the HTML file
+@app.get("/app")
+async def serve_webapp():
+    return FileResponse("index.html")
+
+# Add a simple endpoint to check if webapp is working
+@app.get("/")
+def root():
+    return {"message": "Karanka AI Trading Bot", "webapp": "/app", "api_docs": "/docs"}
+
+# Add market data endpoint (missing in your current code)
+@app.get("/api/market-data/{symbol}")
+async def get_market_data(symbol: str):
+    market_data = await ctrader_api.get_market_data(symbol)
+    return {"success": True, "data": market_data}#!/usr/bin/env python3
 """
 🎯 KARANKA MULTIVERSE AI - REAL cTrader BOT
 ACTUAL API INTEGRATION - REAL TRADES
