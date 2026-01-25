@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
 🎯 KARANKA MULTIVERSE AI - REAL DERIV TRADING BOT
-REAL CONNECTION • REAL MARKET DATA • REAL TRADING
+NO SIMULATIONS - REAL CONNECTION ONLY
 """
 
 import os
 import json
 import uuid
-import hashlib
-import hmac
-import base64
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+import asyncio
+from datetime import datetime
+from typing import Dict, List, Optional
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
-import requests
-import random
+import aiohttp
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ============ CREATE STATIC FOLDER ============
 if not os.path.exists("static"):
@@ -30,7 +31,7 @@ if not os.path.exists("static"):
 app = FastAPI(
     title="🎯 Karanka Multiverse AI",
     description="Real Deriv Trading Bot with SMC Strategy",
-    version="15.0.0"
+    version="16.0.0"
 )
 
 app.add_middleware(
@@ -49,115 +50,74 @@ class ConnectionRequest(BaseModel):
     api_token: str
     investment_amount: float = 100.0
 
-class TradeSignal(BaseModel):
-    symbol: str
-    direction: str
-    entry_price: float
-    stop_loss: float
-    take_profit: float
-    amount: float
-    confidence: float
-    reason: str
-
-# ============ REAL DERIV API MANAGER ============
-class RealDerivAPI:
-    """ACTUAL DERIV API INTEGRATION - PROVEN TO WORK"""
+# ============ REAL DERIV API CLIENT ============
+class DerivAPIClient:
+    """REAL Deriv API Client - No Simulations"""
+    
+    BASE_URL = "https://api.deriv.com"
     
     def __init__(self):
-        self.api_tokens = {}
-        self.accounts = {}
-        self.market_prices = {}
-        
-        # Deriv symbols mapping (REAL SYMBOLS)
-        self.deriv_symbols = {
-            'EURUSD': 'frxEURUSD',
-            'GBPUSD': 'frxGBPUSD', 
-            'USDJPY': 'frxUSDJPY',
-            'XAUUSD': 'frxXAUUSD',
-            'BTCUSD': 'cryBTCUSD',
-            'ETHUSD': 'cryETHUSD'
-        }
-        
-        print("✅ Deriv API Manager initialized")
+        self.session = None
+        logger.info("✅ Deriv API Client initialized")
+    
+    async def get_session(self):
+        """Get or create aiohttp session"""
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession(
+                headers={
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                timeout=aiohttp.ClientTimeout(total=30)
+            )
+        return self.session
+    
+    async def close(self):
+        """Close session"""
+        if self.session:
+            await self.session.close()
     
     async def verify_token(self, api_token: str) -> Dict:
-        """VERIFY DERIV API TOKEN - REAL VERIFICATION"""
-        print(f"🔍 Verifying Deriv API token...")
+        """REAL Deriv token verification"""
+        logger.info(f"🔍 Verifying Deriv API token...")
+        
+        session = await self.get_session()
+        headers = {
+            'Authorization': f'Token {api_token}',
+            'Content-Type': 'application/json'
+        }
         
         try:
-            headers = {
-                'Authorization': f'Token {api_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Test API call to verify token
-            response = requests.get(
-                "https://api.deriv.com/api/v1/verify",
-                headers=headers,
-                timeout=10
-            )
-            
-            print(f"📡 Verify Response Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Token verified successfully!")
-                print(f"📊 Account: {data.get('loginid', 'N/A')}")
-                return {
-                    'success': True,
-                    'valid': True,
-                    'account_id': data.get('loginid', ''),
-                    'currency': data.get('currency', 'USD'),
-                    'is_demo': 'VRTC' in str(data.get('loginid', ''))
-                }
-            else:
-                print(f"❌ Token verification failed: {response.status_code}")
-                # Try alternative endpoint
-                return await self._try_alternative_verification(api_token)
+            async with session.get(
+                f"{self.BASE_URL}/api/v1/verify",
+                headers=headers
+            ) as response:
+                logger.info(f"📡 Verify response: {response.status}")
                 
-        except Exception as e:
-            print(f"❌ Token verification error: {str(e)}")
-            return {
-                'success': False,
-                'valid': False,
-                'error': str(e)
-            }
-    
-    async def _try_alternative_verification(self, api_token: str) -> Dict:
-        """Alternative verification method"""
-        try:
-            headers = {
-                'Authorization': f'Bearer {api_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Try account list endpoint
-            response = requests.post(
-                "https://api.deriv.com/api/v1/account_list",
-                headers=headers,
-                json={"account_list": 1},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'account_list' in data and len(data['account_list']) > 0:
-                    account = data['account_list'][0]
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"✅ Token verified: {data.get('loginid')}")
                     return {
                         'success': True,
                         'valid': True,
-                        'account_id': account.get('loginid', ''),
-                        'currency': account.get('currency', 'USD'),
-                        'is_demo': 'VRTC' in str(account.get('loginid', ''))
+                        'account_id': data.get('loginid', ''),
+                        'currency': data.get('currency', 'USD'),
+                        'country': data.get('country', ''),
+                        'email': data.get('email', ''),
+                        'is_demo': 'VRTC' in str(data.get('loginid', '')),
+                        'name': f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
                     }
-            
-            return {
-                'success': False,
-                'valid': False,
-                'error': 'Could not verify token with any method'
-            }
-            
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ Token verification failed: {response.status} - {error_text}")
+                    return {
+                        'success': False,
+                        'valid': False,
+                        'error': f"API Error {response.status}: {error_text[:100]}"
+                    }
+                    
         except Exception as e:
+            logger.error(f"❌ Token verification exception: {str(e)}")
             return {
                 'success': False,
                 'valid': False,
@@ -165,277 +125,214 @@ class RealDerivAPI:
             }
     
     async def get_accounts(self, api_token: str) -> List[Dict]:
-        """GET REAL DERIV ACCOUNTS"""
-        print(f"📋 Getting Deriv accounts...")
+        """Get REAL Deriv accounts - ALL accounts the user has"""
+        logger.info(f"📋 Getting Deriv accounts...")
+        
+        session = await self.get_session()
+        headers = {
+            'Authorization': f'Token {api_token}',
+            'Content-Type': 'application/json'
+        }
         
         try:
-            headers = {
-                'Authorization': f'Bearer {api_token}',
-                'Content-Type': 'application/json'
-            }
-            
             # Get account list
-            response = requests.post(
-                "https://api.deriv.com/api/v1/account_list",
+            async with session.post(
+                f"{self.BASE_URL}/api/v1/account_list",
                 headers=headers,
-                json={"account_list": 1},
-                timeout=10
-            )
-            
-            print(f"📡 Accounts Response Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                accounts = []
+                json={"account_list": 1}
+            ) as response:
+                logger.info(f"📡 Accounts response: {response.status}")
                 
-                for acc in data.get('account_list', []):
-                    is_demo = 'VRTC' in str(acc.get('loginid', ''))
+                if response.status == 200:
+                    data = await response.json()
+                    accounts = []
                     
-                    # Get balance for this account
-                    balance = await self.get_account_balance(api_token, acc.get('loginid'))
+                    if 'account_list' in data:
+                        for acc in data['account_list']:
+                            account_id = acc.get('loginid', '')
+                            is_demo = 'VRTC' in str(account_id)
+                            
+                            # Get balance for each account
+                            balance = await self.get_account_balance(api_token, account_id)
+                            
+                            accounts.append({
+                                'account_id': account_id,
+                                'name': f"Deriv {'Demo' if is_demo else 'Real'} Account",
+                                'type': 'demo' if is_demo else 'real',
+                                'broker': 'Deriv',
+                                'currency': acc.get('currency', 'USD'),
+                                'balance': balance,
+                                'equity': balance,
+                                'margin': 0.0,
+                                'free_margin': balance,
+                                'leverage': acc.get('leverage', 1000),
+                                'platform': 'Deriv',
+                                'is_demo': is_demo,
+                                'icon': '⚡' if is_demo else '💼',
+                                'country': acc.get('country', ''),
+                                'email': acc.get('email', ''),
+                                'trading_group': acc.get('landing_company_name', '')
+                            })
                     
-                    accounts.append({
-                        'account_id': acc.get('loginid', ''),
-                        'name': f"Deriv {'Demo' if is_demo else 'Real'} Account",
-                        'type': 'demo' if is_demo else 'real',
-                        'broker': 'Deriv',
-                        'currency': acc.get('currency', 'USD'),
-                        'balance': balance,
-                        'equity': balance,
-                        'margin': 0.0,
-                        'free_margin': balance,
-                        'leverage': 1000,
-                        'platform': 'Deriv',
-                        'is_demo': is_demo,
-                        'icon': '⚡' if is_demo else '💼',
-                        'country': acc.get('country', ''),
-                        'email': acc.get('email', '')
-                    })
-                
-                print(f"✅ Found {len(accounts)} accounts")
-                return accounts
-            
-            print(f"❌ Failed to get accounts: {response.text}")
-            # Return demo accounts as fallback
-            return self.get_demo_accounts()
-            
+                    logger.info(f"✅ Found {len(accounts)} accounts")
+                    return accounts
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ Get accounts failed: {response.status} - {error_text}")
+                    raise Exception(f"API Error {response.status}: {error_text[:100]}")
+                    
         except Exception as e:
-            print(f"❌ Get accounts error: {str(e)}")
-            return self.get_demo_accounts()
+            logger.error(f"❌ Get accounts exception: {str(e)}")
+            raise  # Re-raise to handle in endpoint
     
     async def get_account_balance(self, api_token: str, account_id: str) -> float:
-        """Get account balance"""
-        try:
-            headers = {
-                'Authorization': f'Bearer {api_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            response = requests.post(
-                "https://api.deriv.com/api/v1/balance",
-                headers=headers,
-                json={"balance": 1, "account": account_id},
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return float(data.get('balance', {}).get('balance', 10000.0))
-            
-            return 10000.0  # Default balance
-            
-        except:
-            return 10000.0
-    
-    def get_demo_accounts(self) -> List[Dict]:
-        """Fallback demo accounts"""
-        return [
-            {
-                'account_id': 'VRTC1234567',
-                'name': '⚡ Deriv Demo Account',
-                'type': 'demo',
-                'broker': 'Deriv',
-                'currency': 'USD',
-                'balance': 10000.00,
-                'equity': 10000.00,
-                'margin': 0.0,
-                'free_margin': 10000.00,
-                'leverage': 1000,
-                'platform': 'Deriv',
-                'is_demo': True,
-                'icon': '⚡'
-            }
-        ]
-    
-    async def get_market_data(self, symbol: str, api_token: str) -> Optional[Dict]:
-        """GET REAL MARKET DATA FROM DERIV"""
-        print(f"📊 Getting market data for {symbol}...")
+        """Get REAL account balance"""
+        session = await self.get_session()
+        headers = {
+            'Authorization': f'Token {api_token}',
+            'Content-Type': 'application/json'
+        }
         
         try:
-            deriv_symbol = self.deriv_symbols.get(symbol)
-            if not deriv_symbol:
-                print(f"❌ Invalid symbol: {symbol}")
-                return self.generate_realistic_market_data(symbol)
-            
-            headers = {
-                'Authorization': f'Bearer {api_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            # Get ticks for the symbol
-            response = requests.post(
-                "https://api.deriv.com/api/v1/tick_history",
+            async with session.post(
+                f"{self.BASE_URL}/api/v1/balance",
                 headers=headers,
-                json={
+                json={"balance": 1, "account": account_id}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if 'balance' in data and 'balance' in data['balance']:
+                        return float(data['balance']['balance'])
+                return 0.0
+        except:
+            return 0.0
+    
+    async def get_active_symbols(self, api_token: str) -> List[Dict]:
+        """Get REAL active symbols"""
+        session = await self.get_session()
+        headers = {
+            'Authorization': f'Token {api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            async with session.get(
+                f"{self.BASE_URL}/api/v1/active_symbols",
+                headers=headers,
+                params={"active_symbols": "brief"}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('active_symbols', [])
+                return []
+        except:
+            return []
+    
+    async def get_market_data(self, api_token: str, symbol: str) -> Dict:
+        """Get REAL market data"""
+        logger.info(f"📊 Getting market data for {symbol}...")
+        
+        session = await self.get_session()
+        headers = {
+            'Authorization': f'Token {api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Map symbol to Deriv symbol
+        symbol_map = {
+            'EURUSD': 'frxEURUSD',
+            'GBPUSD': 'frxGBPUSD',
+            'USDJPY': 'frxUSDJPY',
+            'XAUUSD': 'frxXAUUSD',
+            'BTCUSD': 'cryBTCUSD',
+            'ETHUSD': 'cryETHUSD'
+        }
+        
+        deriv_symbol = symbol_map.get(symbol, symbol)
+        
+        try:
+            # Get tick history
+            async with session.get(
+                f"{self.BASE_URL}/api/v1/tick_history",
+                headers=headers,
+                params={
                     "ticks_history": deriv_symbol,
                     "count": 100,
-                    "granularity": 60,  # 1-minute candles
+                    "granularity": 60,
                     "style": "candles"
-                },
-                timeout=10
-            )
-            
-            print(f"📡 Market Data Response Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if 'candles' in data and len(data['candles']) > 0:
-                    candles = data['candles']
-                    current_price = float(candles[-1].get('close', 0))
-                    
-                    processed_candles = []
-                    for candle in candles[-50:]:  # Last 50 candles
-                        processed_candles.append({
-                            'time': candle.get('epoch', 0),
-                            'open': float(candle.get('open', 0)),
-                            'high': float(candle.get('high', 0)),
-                            'low': float(candle.get('low', 0)),
-                            'close': float(candle.get('close', 0)),
-                            'volume': candle.get('volume', 0)
-                        })
-                    
-                    print(f"✅ Got REAL market data for {symbol}: ${current_price}")
-                    
-                    return {
-                        'symbol': symbol,
-                        'candles': processed_candles,
-                        'current_price': current_price,
-                        'timestamp': datetime.now().isoformat(),
-                        'source': 'Deriv API',
-                        'candle_count': len(processed_candles)
-                    }
-                else:
-                    print(f"⚠️ No candle data for {symbol}, using generated data")
-            
-            # If API fails, use WebSocket fallback
-            return await self.get_market_data_websocket(symbol, api_token)
-            
-        except Exception as e:
-            print(f"❌ Market data error for {symbol}: {str(e)}")
-            return self.generate_realistic_market_data(symbol)
-    
-    async def get_market_data_websocket(self, symbol: str, api_token: str) -> Optional[Dict]:
-        """Alternative WebSocket market data"""
-        try:
-            # For now, return generated data
-            return self.generate_realistic_market_data(symbol)
-        except:
-            return self.generate_realistic_market_data(symbol)
-    
-    def generate_realistic_market_data(self, symbol: str) -> Dict:
-        """Generate realistic market data when API fails"""
-        base_prices = {
-            'EURUSD': 1.08500,
-            'GBPUSD': 1.26500,
-            'USDJPY': 147.500,
-            'XAUUSD': 2015.00,
-            'BTCUSD': 42500.00,
-            'ETHUSD': 2250.00
-        }
-        
-        base_price = base_prices.get(symbol, 1.08500)
-        candles = []
-        current_price = base_price
-        
-        for i in range(100):
-            volatility = 0.0005 if symbol in ['EURUSD', 'GBPUSD'] else 0.001
-            change = random.uniform(-volatility, volatility)
-            current_price += change
-            current_price = max(0.00001, current_price)
-            
-            candles.append({
-                'time': int((datetime.now() - timedelta(minutes=(99-i))).timestamp() * 1000),
-                'open': round(current_price, 5),
-                'high': round(current_price + abs(random.uniform(0, volatility/2)), 5),
-                'low': round(current_price - abs(random.uniform(0, volatility/2)), 5),
-                'close': round(current_price + random.uniform(-volatility/3, volatility/3), 5),
-                'volume': random.randint(100, 1000)
-            })
-        
-        current_price = candles[-1]['close'] if candles else base_price
-        
-        print(f"📊 Generated market data for {symbol}: ${current_price}")
-        
-        return {
-            'symbol': symbol,
-            'candles': candles[-50:],
-            'current_price': current_price,
-            'timestamp': datetime.now().isoformat(),
-            'source': 'Generated',
-            'candle_count': len(candles[-50:])
-        }
-    
-    async def execute_trade(self, api_token: str, account_id: str, trade_data: Dict) -> Dict:
-        """EXECUTE REAL TRADE ON DERIV"""
-        print(f"🚀 Executing trade: {trade_data}")
-        
-        try:
-            deriv_symbol = self.deriv_symbols.get(trade_data['symbol'])
-            if not deriv_symbol:
-                return {'success': False, 'error': 'Invalid symbol'}
-            
-            # For now, simulate successful trade
-            # REAL TRADING CODE WOULD GO HERE
-            
-            trade_id = f"DVR_{uuid.uuid4().hex[:8].upper()}"
-            
-            print(f"✅ Trade simulated: {trade_id}")
-            
-            return {
-                'success': True,
-                'trade_id': trade_id,
-                'message': 'Trade ready for execution (Enable real trading in settings)',
-                'details': {
-                    'symbol': trade_data['symbol'],
-                    'direction': trade_data['direction'],
-                    'amount': trade_data['amount'],
-                    'entry_price': trade_data['entry_price'],
-                    'stop_loss': trade_data['stop_loss'],
-                    'take_profit': trade_data['take_profit'],
-                    'timestamp': datetime.now().isoformat(),
-                    'status': 'simulated',
-                    'note': 'Enable real trading by uncommenting API calls in code'
                 }
-            }
-            
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if 'candles' in data and data['candles']:
+                        candles = data['candles'][-50:]  # Last 50 candles
+                        current_price = float(candles[-1]['close']) if candles else 0
+                        
+                        processed_candles = []
+                        for candle in candles:
+                            processed_candles.append({
+                                'time': candle.get('epoch', 0),
+                                'open': float(candle.get('open', 0)),
+                                'high': float(candle.get('high', 0)),
+                                'low': float(candle.get('low', 0)),
+                                'close': float(candle.get('close', 0)),
+                                'volume': candle.get('volume', 0)
+                            })
+                        
+                        logger.info(f"✅ Got REAL market data for {symbol}: ${current_price}")
+                        
+                        return {
+                            'success': True,
+                            'symbol': symbol,
+                            'candles': processed_candles,
+                            'current_price': current_price,
+                            'timestamp': datetime.now().isoformat(),
+                            'source': 'Deriv API',
+                            'candle_count': len(processed_candles)
+                        }
+                    else:
+                        return {
+                            'success': False,
+                            'error': 'No candle data available',
+                            'symbol': symbol,
+                            'current_price': 0,
+                            'candles': [],
+                            'source': 'Deriv API (empty)'
+                        }
+                else:
+                    error_text = await response.text()
+                    return {
+                        'success': False,
+                        'error': f"API Error {response.status}",
+                        'symbol': symbol,
+                        'current_price': 0,
+                        'candles': []
+                    }
+                    
         except Exception as e:
-            print(f"❌ Trade execution error: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"❌ Market data error: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'symbol': symbol,
+                'current_price': 0,
+                'candles': []
+            }
 
-# Initialize REAL Deriv API
-deriv_api = RealDerivAPI()
+# Initialize REAL Deriv API Client
+deriv_client = DerivAPIClient()
 
-# ============ TRADING BOT ENGINE ============
-class TradingBot:
+# ============ SESSION MANAGER ============
+class SessionManager:
     def __init__(self):
-        self.sessions = {}
-        self.trades = {}
-        self.api_tokens = {}
-        print("✅ Trading Bot initialized")
+        self.sessions = {}  # client_id -> session_data
+        self.api_tokens = {}  # client_id -> api_token
+        self.user_accounts = {}  # client_id -> accounts_list
+        logger.info("✅ Session Manager initialized")
     
     def create_session(self, api_token: str, investment: float) -> str:
-        """Create user session"""
+        """Create a new user session"""
         client_id = f"deriv_{uuid.uuid4().hex[:8]}"
         
         self.sessions[client_id] = {
@@ -443,35 +340,48 @@ class TradingBot:
             'investment': max(0.35, investment),
             'connected_at': datetime.now().isoformat(),
             'status': 'connected',
-            'broker': 'Deriv'
+            'broker': 'Deriv',
+            'selected_account': None
         }
         
         self.api_tokens[client_id] = api_token
-        self.trades[client_id] = []
         
-        print(f"✅ Session created: {client_id}")
-        
+        logger.info(f"✅ Session created: {client_id}")
         return client_id
     
-    def get_api_token(self, client_id: str) -> Optional[str]:
+    def get_token(self, client_id: str) -> Optional[str]:
         """Get API token for client"""
         return self.api_tokens.get(client_id)
+    
+    def set_accounts(self, client_id: str, accounts: List[Dict]):
+        """Store user's accounts"""
+        self.user_accounts[client_id] = accounts
+    
+    def get_accounts(self, client_id: str) -> List[Dict]:
+        """Get stored accounts for client"""
+        return self.user_accounts.get(client_id, [])
+    
+    def select_account(self, client_id: str, account_id: str):
+        """User selects an account to trade with"""
+        if client_id in self.sessions:
+            self.sessions[client_id]['selected_account'] = account_id
+            logger.info(f"✅ Account selected: {account_id} for {client_id}")
 
-# Initialize bot
-bot = TradingBot()
+# Initialize session manager
+session_manager = SessionManager()
 
 # ============ FASTAPI ENDPOINTS ============
 @app.get("/")
 async def root():
     return {
         "app": "🎯 Karanka Multiverse AI",
-        "version": "15.0.0",
+        "version": "16.0.0",
         "status": "online",
         "broker": "Deriv",
-        "features": ["REAL API Connection", "REAL Market Data", "SMC Strategy", "6-Tab Mobile UI"],
+        "features": ["REAL Deriv API", "REAL Account Access", "REAL Market Data", "SMC Strategy"],
         "webapp": "/app",
         "api_docs": "/docs",
-        "health": "/health"
+        "connection_test": "/api/test-connection"
     }
 
 @app.get("/health")
@@ -479,106 +389,188 @@ async def health():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "sessions": len(bot.sessions),
-        "api_ready": True
+        "active_sessions": len(session_manager.sessions),
+        "api_client": "Deriv API",
+        "version": "16.0.0"
     }
 
 @app.post("/api/connect")
 async def connect(request: ConnectionRequest):
-    """CONNECT TO DERIV - REAL CONNECTION"""
-    print(f"🔗 Connection request received")
-    print(f"📝 API Token length: {len(request.api_token)}")
+    """
+    REAL Deriv Connection - No Simulations
+    This WILL connect to your real Deriv account
+    """
+    logger.info(f"🔗 Connection request received")
     
-    if not request.api_token or len(request.api_token) < 10:
+    if not request.api_token or len(request.api_token) < 20:
         return {
             "success": False,
-            "error": "Invalid API token provided"
+            "error": "Invalid API token format. Token should be at least 20 characters."
         }
     
-    # Verify the token
-    verification = await deriv_api.verify_token(request.api_token)
+    # Step 1: Verify the token with Deriv
+    logger.info("Step 1: Verifying API token with Deriv...")
+    verification = await deriv_client.verify_token(request.api_token)
     
     if not verification.get('valid', False):
         return {
             "success": False,
-            "error": "Invalid Deriv API token. Please check your token.",
-            "debug": verification
+            "error": "Invalid Deriv API token",
+            "details": verification.get('error', 'Token verification failed'),
+            "debug": {
+                "token_length": len(request.api_token),
+                "token_prefix": request.api_token[:10] + "..."
+            }
         }
     
-    # Create session
-    client_id = bot.create_session(request.api_token, request.investment_amount)
+    logger.info(f"✅ Token verified: {verification.get('account_id')}")
     
-    # Get accounts for this token
-    accounts = await deriv_api.get_accounts(request.api_token)
+    # Step 2: Create session
+    client_id = session_manager.create_session(request.api_token, request.investment_amount)
     
-    return {
-        "success": True,
-        "client_id": client_id,
-        "message": "Connected to Deriv successfully!",
-        "token_valid": True,
-        "account_type": "demo" if verification.get('is_demo', True) else "real",
-        "accounts_available": len(accounts),
-        "verification": verification
-    }
-
-@app.post("/api/accounts")
-async def get_accounts_endpoint(request: Request):
-    """Get accounts for a client"""
+    # Step 3: Get ALL user accounts
+    logger.info("Step 2: Fetching user accounts from Deriv...")
     try:
-        data = await request.json()
-        client_id = data.get('client_id')
+        accounts = await deriv_client.get_accounts(request.api_token)
         
-        if not client_id or client_id not in bot.sessions:
+        if not accounts:
             return {
                 "success": False,
-                "error": "Not connected. Please connect first.",
-                "debug": {"client_id": client_id, "sessions": list(bot.sessions.keys())}
+                "error": "No trading accounts found on Deriv",
+                "client_id": client_id,
+                "verification": verification
             }
         
-        api_token = bot.get_api_token(client_id)
-        if not api_token:
-            return {"success": False, "error": "No API token found"}
+        # Store accounts for this client
+        session_manager.set_accounts(client_id, accounts)
         
-        accounts = await deriv_api.get_accounts(api_token)
+        # Get active symbols for trading
+        symbols = await deriv_client.get_active_symbols(request.api_token)
+        
+        logger.info(f"✅ Successfully connected! Found {len(accounts)} accounts")
         
         return {
             "success": True,
+            "client_id": client_id,
+            "message": "Successfully connected to Deriv!",
+            "verification": verification,
             "accounts": accounts,
-            "count": len(accounts)
+            "account_count": len(accounts),
+            "symbols_count": len(symbols),
+            "selected_account": None,
+            "next_step": "Call /api/select-account to choose trading account"
         }
         
     except Exception as e:
-        print(f"❌ Accounts endpoint error: {str(e)}")
+        logger.error(f"❌ Failed to get accounts: {str(e)}")
         return {
-            "success": True,
-            "accounts": deriv_api.get_demo_accounts(),
-            "count": 1,
-            "note": "Using demo accounts due to error"
+            "success": False,
+            "error": f"Failed to fetch accounts: {str(e)}",
+            "client_id": client_id,
+            "verification": verification,
+            "debug": "Check if your token has account_list permission"
         }
 
+@app.post("/api/select-account")
+async def select_account(request: Request):
+    """User selects which Deriv account to trade with"""
+    try:
+        data = await request.json()
+        client_id = data.get('client_id')
+        account_id = data.get('account_id')
+        
+        if not client_id:
+            return {"success": False, "error": "client_id required"}
+        
+        if not account_id:
+            return {"success": False, "error": "account_id required"}
+        
+        # Get user's stored accounts
+        accounts = session_manager.get_accounts(client_id)
+        if not accounts:
+            return {"success": False, "error": "No accounts found. Connect first."}
+        
+        # Find the selected account
+        selected_account = None
+        for acc in accounts:
+            if acc['account_id'] == account_id:
+                selected_account = acc
+                break
+        
+        if not selected_account:
+            return {"success": False, "error": "Account not found in your accounts"}
+        
+        # Store selection
+        session_manager.select_account(client_id, account_id)
+        
+        # Get API token for market data
+        api_token = session_manager.get_token(client_id)
+        
+        # Test market data access with this account
+        market_test = await deriv_client.get_market_data(api_token, "EURUSD")
+        
+        return {
+            "success": True,
+            "message": f"Account selected: {selected_account['name']}",
+            "account": selected_account,
+            "market_data_test": market_test.get('success', False),
+            "trading_ready": True,
+            "next_step": "Use /api/analyze to analyze markets"
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/accounts/{client_id}")
+async def get_user_accounts(client_id: str):
+    """Get accounts for a specific user"""
+    accounts = session_manager.get_accounts(client_id)
+    
+    if not accounts:
+        return {
+            "success": False,
+            "error": "No accounts found. Please connect first.",
+            "client_exists": client_id in session_manager.sessions
+        }
+    
+    return {
+        "success": True,
+        "accounts": accounts,
+        "count": len(accounts),
+        "has_selected": session_manager.sessions.get(client_id, {}).get('selected_account') is not None
+    }
+
 @app.post("/api/analyze")
-async def analyze(request: Request):
-    """Analyze market with SMC strategy"""
+async def analyze_market(request: Request):
+    """Analyze market with REAL data"""
     try:
         data = await request.json()
         client_id = data.get('client_id')
         symbol = data.get('symbol', 'EURUSD')
         
-        if not client_id or client_id not in bot.sessions:
-            return {"success": False, "error": "Not connected"}
+        if not client_id:
+            return {"success": False, "error": "client_id required"}
         
-        api_token = bot.get_api_token(client_id)
+        if client_id not in session_manager.sessions:
+            return {"success": False, "error": "Not connected. Call /api/connect first."}
+        
+        api_token = session_manager.get_token(client_id)
         if not api_token:
-            return {"success": False, "error": "No API token"}
+            return {"success": False, "error": "No API token found"}
         
         # Get REAL market data
-        market_data = await deriv_api.get_market_data(symbol, api_token)
+        logger.info(f"Analyzing {symbol} for client {client_id}")
+        market_data = await deriv_client.get_market_data(api_token, symbol)
         
-        if not market_data:
-            return {"success": False, "error": "Failed to get market data"}
+        if not market_data.get('success', False):
+            return {
+                "success": False,
+                "error": market_data.get('error', 'Failed to get market data'),
+                "symbol": symbol
+            }
         
-        # Generate trading signal
-        signal = generate_trading_signal(market_data)
+        # Generate trading signal (simplified for now)
+        signal = generate_signal(market_data)
         
         return {
             "success": True,
@@ -587,156 +579,109 @@ async def analyze(request: Request):
                 "symbol": market_data['symbol'],
                 "price": market_data['current_price'],
                 "source": market_data['source'],
-                "candles": len(market_data['candles'])
-            }
+                "candles": market_data['candle_count'],
+                "timestamp": market_data['timestamp']
+            },
+            "client": client_id,
+            "selected_account": session_manager.sessions[client_id].get('selected_account')
         }
         
     except Exception as e:
-        print(f"❌ Analyze error: {str(e)}")
+        logger.error(f"Analyze error: {str(e)}")
         return {"success": False, "error": str(e)}
 
-@app.post("/api/trade")
-async def execute_trade_endpoint(request: Request):
-    """Execute a trade"""
-    try:
-        data = await request.json()
-        client_id = data.get('client_id')
-        signal = data.get('signal')
-        
-        if not client_id or client_id not in bot.sessions:
-            return {"success": False, "error": "Not connected"}
-        
-        if not signal:
-            return {"success": False, "error": "No signal provided"}
-        
-        session = bot.sessions[client_id]
-        api_token = bot.get_api_token(client_id)
-        account_id = session.get('selected_account_id', '')
-        
-        # Execute trade
-        result = await deriv_api.execute_trade(api_token, account_id, signal)
-        
-        if result['success']:
-            # Record trade
-            trade_record = {
-                'trade_id': result.get('trade_id'),
-                'client_id': client_id,
-                'symbol': signal['symbol'],
-                'direction': signal['direction'],
-                'amount': signal['amount'],
-                'entry_price': signal['entry_price'],
-                'status': 'open',
-                'timestamp': datetime.now().isoformat(),
-                'details': result.get('details', {})
-            }
-            
-            if client_id in bot.trades:
-                bot.trades[client_id].append(trade_record)
-        
-        return result
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.get("/api/trades/{client_id}")
-async def get_trades(client_id: str):
-    """Get trades for a client"""
-    trades = bot.trades.get(client_id, [])
+@app.get("/api/test-connection")
+async def test_connection():
+    """Test if API is working"""
     return {
-        "success": True,
-        "trades": trades,
-        "count": len(trades)
+        "status": "online",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Karanka AI Trading Bot",
+        "version": "16.0.0",
+        "deriv_api": "Ready",
+        "session_manager": "Ready",
+        "active_sessions": len(session_manager.sessions)
     }
 
-@app.get("/api/market-data/{symbol}")
-async def get_market_data_endpoint(symbol: str, request: Request):
-    """Get market data (public endpoint)"""
-    try:
-        # Try to get client_id if available
-        try:
-            data = await request.json()
-            client_id = data.get('client_id')
-            if client_id and client_id in bot.sessions:
-                api_token = bot.get_api_token(client_id)
-                if api_token:
-                    market_data = await deriv_api.get_market_data(symbol, api_token)
-                    if market_data:
-                        return {"success": True, "data": market_data}
-        except:
-            pass
-        
-        # Fallback to generated data
-        market_data = deriv_api.generate_realistic_market_data(symbol)
-        return {"success": True, "data": market_data}
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+@app.get("/api/debug/session/{client_id}")
+async def debug_session(client_id: str):
+    """Debug session info"""
+    if client_id not in session_manager.sessions:
+        return {"error": "Session not found"}
+    
+    session = session_manager.sessions[client_id]
+    accounts = session_manager.get_accounts(client_id)
+    
+    return {
+        "client_id": client_id,
+        "session": session,
+        "accounts_count": len(accounts) if accounts else 0,
+        "has_token": client_id in session_manager.api_tokens,
+        "selected_account": session.get('selected_account'),
+        "connected_since": session.get('connected_at')
+    }
 
 # ============ TRADING SIGNAL GENERATION ============
-def generate_trading_signal(market_data: Dict) -> Dict:
-    """Generate trading signal based on market data"""
-    candles = market_data['candles']
-    current_price = market_data['current_price']
+def generate_signal(market_data: Dict) -> Dict:
+    """Generate trading signal from market data"""
+    candles = market_data.get('candles', [])
+    current_price = market_data.get('current_price', 0)
     
-    if len(candles) < 20:
+    if len(candles) < 10 or current_price <= 0:
         return {
-            'symbol': market_data['symbol'],
-            'direction': 'hold',
-            'entry_price': current_price,
-            'stop_loss': 0,
-            'take_profit': 0,
-            'amount': 0,
+            'action': 'hold',
             'confidence': 0,
-            'reason': 'Insufficient data'
+            'reason': 'Insufficient data',
+            'entry': 0,
+            'stop_loss': 0,
+            'take_profit': 0
         }
     
-    # Simple trend detection
-    recent_closes = [c['close'] for c in candles[-10:]]
-    avg_close = sum(recent_closes) / len(recent_closes)
+    # Simple trend analysis
+    recent_prices = [c['close'] for c in candles[-10:]]
+    avg_price = sum(recent_prices) / len(recent_prices)
     
-    if current_price > avg_close * 1.001:
-        direction = 'buy'
-        confidence = random.uniform(70, 85)
-        reason = "Bullish trend detected"
-    elif current_price < avg_close * 0.999:
-        direction = 'sell'
-        confidence = random.uniform(70, 85)
-        reason = "Bearish trend detected"
+    if current_price > avg_price * 1.002:
+        action = 'buy'
+        confidence = 75
+        reason = "Bullish momentum"
+    elif current_price < avg_price * 0.998:
+        action = 'sell'
+        confidence = 75
+        reason = "Bearish momentum"
     else:
-        direction = 'hold'
+        action = 'hold'
         confidence = 50
-        reason = "Market is ranging"
+        reason = "Market ranging"
     
-    if direction != 'hold':
-        if direction == 'buy':
+    if action != 'hold':
+        if action == 'buy':
             entry = current_price
-            sl = entry * 0.995
-            tp = entry * 1.01
-        else:
+            stop_loss = entry * 0.995
+            take_profit = entry * 1.010
+        else:  # sell
             entry = current_price
-            sl = entry * 1.005
-            tp = entry * 0.99
+            stop_loss = entry * 1.005
+            take_profit = entry * 0.990
         
         return {
-            'symbol': market_data['symbol'],
-            'direction': direction,
-            'entry_price': round(entry, 5),
-            'stop_loss': round(sl, 5),
-            'take_profit': round(tp, 5),
-            'amount': 10.0,  # Fixed amount for now
-            'confidence': round(confidence, 1),
-            'reason': reason
+            'action': action,
+            'confidence': confidence,
+            'reason': reason,
+            'entry': round(entry, 5),
+            'stop_loss': round(stop_loss, 5),
+            'take_profit': round(take_profit, 5),
+            'risk_reward': "1:2",
+            'timestamp': datetime.now().isoformat()
         }
     
     return {
-        'symbol': market_data['symbol'],
-        'direction': 'hold',
-        'entry_price': current_price,
-        'stop_loss': 0,
-        'take_profit': 0,
-        'amount': 0,
+        'action': 'hold',
         'confidence': confidence,
-        'reason': reason
+        'reason': reason,
+        'entry': 0,
+        'stop_loss': 0,
+        'take_profit': 0
     }
 
 # ============ WEBAPP ============
@@ -745,100 +690,50 @@ async def serve_webapp():
     """Serve the mobile webapp"""
     try:
         return FileResponse("index.html")
-    except Exception as e:
-        print(f"❌ Error serving index.html: {e}")
+    except:
         return HTMLResponse(content="""
         <!DOCTYPE html>
         <html>
-        <head>
-            <title>🎯 Karanka AI</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { 
-                    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-                    color: white; 
-                    font-family: Arial; 
-                    text-align: center;
-                    padding: 50px 20px;
-                }
-                h1 { color: #FFD700; font-size: 28px; margin-bottom: 20px; }
-                .status { 
-                    background: rgba(0, 255, 0, 0.2); 
-                    color: #00FF00; 
-                    padding: 15px; 
-                    border-radius: 10px;
-                    border: 1px solid #00FF00;
-                    margin: 20px 0;
-                }
-                .warning { 
-                    background: rgba(255, 215, 0, 0.2); 
-                    color: #FFD700; 
-                    padding: 15px; 
-                    border-radius: 10px;
-                    border: 1px solid #FFD700;
-                    margin: 20px 0;
-                }
-                a { color: #FFD700; text-decoration: none; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <h1>🎯 KARANKA AI - REAL TRADING BOT</h1>
-            <div class="status">
-                ✅ BACKEND IS RUNNING<br>
-                Version 15.0.0 • Deriv API • Python 3.9
-            </div>
-            <div class="warning">
-                ⚠️ Mobile webapp file not found<br>
-                Check if index.html exists in the project root
-            </div>
-            <p>API Status: <a href="/health">/health</a></p>
-            <p>API Documentation: <a href="/docs">/docs</a></p>
-        </body>
+        <head><title>Karanka AI</title></head>
+        <body><h1>Webapp Loading...</h1></body>
         </html>
         """)
 
-# ============ DEBUG ENDPOINTS ============
-@app.get("/debug/connection")
-async def debug_connection():
-    """Debug connection status"""
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "active_sessions": len(bot.sessions),
-        "session_ids": list(bot.sessions.keys()),
-        "total_trades": sum(len(t) for t in bot.trades.values()),
-        "api_status": "operational",
-        "environment": {
-            "port": os.environ.get("PORT", "8000"),
-            "python_version": "3.9"
-        }
-    }
+# ============ STARTUP/SHUTDOWN ============
+@app.on_event("startup")
+async def startup():
+    logger.info("🚀 Karanka AI Trading Bot starting...")
+    logger.info("✅ Deriv API Client initialized")
 
-@app.get("/debug/market/{symbol}")
-async def debug_market(symbol: str):
-    """Debug market data"""
-    market_data = deriv_api.generate_realistic_market_data(symbol)
-    return {
-        "symbol": symbol,
-        "data": market_data,
-        "source": market_data['source'],
-        "candle_count": len(market_data['candles'])
-    }
+@app.on_event("shutdown")
+async def shutdown():
+    await deriv_client.close()
+    logger.info("👋 Deriv API Client closed")
 
 # ============ RUN SERVER ============
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     
     print("\n" + "="*80)
-    print("🎯 KARANKA MULTIVERSE AI - REAL DERIV TRADING BOT")
+    print("🎯 KARANKA MULTIVERSE AI - REAL DERIV CONNECTION")
     print("="*80)
-    print(f"✅ Version: 15.0.0")
-    print(f"✅ Python: 3.9")
-    print(f"✅ Broker: Deriv (REAL API CONNECTION)")
-    print(f"✅ Features: Real Token Verification • Real Market Data • SMC Strategy")
-    print(f"✅ Mobile WebApp: /app")
-    print(f"✅ Port: {port}")
+    print("✅ Version: 16.0.0")
+    print("✅ Broker: Deriv (REAL API - NO SIMULATIONS)")
+    print("✅ Features:")
+    print("   • REAL Deriv token verification")
+    print("   • REAL account listing (all user accounts)")
+    print("   • REAL market data from Deriv")
+    print("   • REAL session management")
+    print("✅ Mobile WebApp: /app")
+    print("✅ Health Check: /health")
+    print("✅ Test Connection: /api/test-connection")
     print("="*80)
-    print("🚀 Server starting...")
+    print("🚀 Server starting on port", port)
     print("="*80)
     
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    )
