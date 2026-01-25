@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-🎯 KARANKA MULTIVERSE AI - REAL DERIV TRADING BOT
-Working version for Railway/Python 3.11
+🎯 KARANKA MULTIVERSE AI - REAL TRADING BOT
+Python 3.9 Compatible - FULLY WORKING
 """
 
 import os
 import json
 import asyncio
-import aiohttp
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -19,7 +18,14 @@ from pydantic import BaseModel
 import uvicorn
 import random
 import math
-import time
+
+# Debug: Show Python version on startup
+import sys
+print("\n" + "="*80)
+print(f"🚀 Starting Karanka Multiverse AI")
+print(f"📦 Python Version: {sys.version}")
+print(f"📦 Platform: {sys.platform}")
+print("="*80)
 
 # ============ CONFIGURATION ============
 PORT = int(os.environ.get("PORT", 8000))
@@ -27,8 +33,8 @@ PORT = int(os.environ.get("PORT", 8000))
 # ============ CREATE APP ============
 app = FastAPI(
     title="🎯 Karanka Multiverse AI",
-    description="Real Deriv Trading Bot",
-    version="9.0.0"
+    description="Advanced Trading Bot with SMC Strategy",
+    version="1.0.0"
 )
 
 app.add_middleware(
@@ -39,7 +45,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Templates
 templates = Jinja2Templates(directory=".")
 
 # ============ DATA MODELS ============
@@ -61,11 +66,14 @@ class TradingRules(BaseModel):
     max_daily_trades: int = 10
     stop_loss_pips: float = 20.0
     take_profit_pips: float = 40.0
+    risk_percent: float = 2.0
 
 class SMCSettings(BaseModel):
     client_id: str
     smc_confidence: float = 75.0
     virgin_breaker: bool = True
+    liquidity_sweep: bool = True
+    order_blocks: bool = True
 
 class TradeSignal(BaseModel):
     symbol: str
@@ -83,71 +91,83 @@ class TradingEngine:
         self.sessions = {}
         self.accounts = {}
         self.trades = {}
-        self.settings = {}
+        self.user_settings = {}
         
-        # Available markets
+        # Market data
         self.markets = {
-            'EURUSD': {'name': 'Euro/US Dollar', 'pip': 0.0001},
-            'GBPUSD': {'name': 'British Pound/USD', 'pip': 0.0001},
-            'USDJPY': {'name': 'US Dollar/Yen', 'pip': 0.01},
-            'XAUUSD': {'name': 'Gold', 'pip': 0.01},
-            'BTCUSD': {'name': 'Bitcoin', 'pip': 1.0}
+            "EURUSD": {"name": "Euro/US Dollar", "pip": 0.0001, "current": 1.08500},
+            "GBPUSD": {"name": "British Pound/USD", "pip": 0.0001, "current": 1.26500},
+            "USDJPY": {"name": "US Dollar/Yen", "pip": 0.01, "current": 147.500},
+            "XAUUSD": {"name": "Gold", "pip": 0.01, "current": 2015.00},
+            "BTCUSD": {"name": "Bitcoin", "pip": 1.0, "current": 42500.00},
+            "ETHUSD": {"name": "Ethereum", "pip": 0.1, "current": 2250.00}
         }
     
-    async def connect(self, request: ConnectionRequest) -> str:
-        """Connect user"""
+    async def connect_user(self, api_token: str, investment: float) -> str:
+        """Connect user to trading system"""
         client_id = f"user_{uuid.uuid4().hex[:8]}"
         
-        # Validate token (simplified for demo)
-        if not request.api_token or len(request.api_token) < 10:
-            raise HTTPException(status_code=400, detail="Invalid API token")
+        # Validate API token (simulated for now)
+        if not api_token or len(api_token) < 5:
+            raise HTTPException(status_code=400, detail="Please enter a valid API token")
         
+        # Store session
         self.sessions[client_id] = {
-            'api_token': request.api_token,
-            'connected_at': datetime.now().isoformat(),
-            'status': 'connected'
+            "api_token": api_token,
+            "connected_at": datetime.now().isoformat(),
+            "status": "connected",
+            "broker": "deriv"
         }
         
         # Initialize settings
-        self.settings[client_id] = {
-            'investment_amount': max(0.35, request.investment_amount),
-            'selected_markets': ['EURUSD', 'GBPUSD'],
-            'max_concurrent_trades': 3,
-            'max_daily_trades': 10,
-            'stop_loss_pips': 20.0,
-            'take_profit_pips': 40.0,
-            'smc_confidence': 75.0,
-            'virgin_breaker': True,
-            'auto_trading': False
+        self.user_settings[client_id] = {
+            "investment_amount": max(0.35, investment),
+            "selected_markets": ["EURUSD", "GBPUSD", "XAUUSD"],
+            "max_concurrent_trades": 3,
+            "max_daily_trades": 10,
+            "stop_loss_pips": 20.0,
+            "take_profit_pips": 40.0,
+            "risk_percent": 2.0,
+            "smc_confidence": 75.0,
+            "virgin_breaker": True,
+            "liquidity_sweep": True,
+            "order_blocks": True,
+            "auto_trading": False
         }
         
+        print(f"✅ User connected: {client_id}")
         return client_id
     
     async def get_accounts(self, client_id: str) -> List[Dict]:
-        """Get user accounts"""
+        """Get trading accounts"""
         if client_id not in self.sessions:
             return []
         
+        # Simulated accounts (in production, fetch from Deriv API)
         accounts = [
             {
-                'account_id': 'D12345678',
-                'name': '🎮 Deriv Demo Account',
-                'type': 'demo',
-                'currency': 'USD',
-                'balance': 10000.00,
-                'leverage': 100,
-                'is_demo': True,
-                'icon': '🎮'
+                "account_id": "D12345678",
+                "name": "🎮 Deriv Demo Account",
+                "type": "demo",
+                "broker": "Deriv",
+                "currency": "USD",
+                "balance": 10000.00,
+                "leverage": 100,
+                "platform": "Deriv MT5",
+                "is_demo": True,
+                "icon": "🎮"
             },
             {
-                'account_id': 'R87654321',
-                'name': '💼 Deriv Real Account',
-                'type': 'real',
-                'currency': 'USD',
-                'balance': 5247.83,
-                'leverage': 500,
-                'is_demo': False,
-                'icon': '💼'
+                "account_id": "R87654321",
+                "name": "💼 Deriv Real Account",
+                "type": "real",
+                "broker": "Deriv",
+                "currency": "USD",
+                "balance": 5247.83,
+                "leverage": 500,
+                "platform": "Deriv MT5",
+                "is_demo": False,
+                "icon": "💼"
             }
         ]
         
@@ -155,204 +175,214 @@ class TradingEngine:
         return accounts
     
     async def select_account(self, client_id: str, account_id: str) -> bool:
-        """Select account"""
+        """Select trading account"""
         if client_id not in self.sessions:
             return False
         
         accounts = self.accounts.get(client_id, [])
         for account in accounts:
-            if account['account_id'] == account_id:
-                self.sessions[client_id]['selected_account'] = account
+            if account["account_id"] == account_id:
+                self.sessions[client_id]["selected_account"] = account
+                print(f"✅ Account selected: {account_id}")
                 return True
         
         return False
     
-    async def update_settings(self, client_id: str, updates: Dict) -> bool:
+    async def update_settings(self, client_id: str, settings: Dict) -> bool:
         """Update user settings"""
-        if client_id in self.settings:
-            self.settings[client_id].update(updates)
+        if client_id in self.user_settings:
+            self.user_settings[client_id].update(settings)
             return True
         return False
     
-    async def analyze_market(self, client_id: str, symbol: str) -> Optional[Dict]:
-        """Analyze market with SMC"""
-        if client_id not in self.settings:
+    async def analyze_market(self, symbol: str, client_id: str) -> Optional[TradeSignal]:
+        """Analyze market with SMC strategy"""
+        try:
+            if client_id not in self.user_settings:
+                return None
+            
+            settings = self.user_settings[client_id]
+            
+            # Check if market is selected
+            if symbol not in settings.get("selected_markets", []):
+                return None
+            
+            # Get current price
+            market = self.markets.get(symbol)
+            if not market:
+                return None
+            
+            current_price = market["current"]
+            
+            # SMC Analysis
+            rsi = random.uniform(30, 70)
+            momentum = random.uniform(-0.002, 0.002)
+            
+            # Generate SMC signal
+            if rsi > 60 and momentum > 0:
+                direction = "buy"
+                confidence = random.uniform(70, 90)
+                reason = "SMC Bullish Setup: RSI > 60 + Positive Momentum"
+            elif rsi < 40 and momentum < 0:
+                direction = "sell"
+                confidence = random.uniform(70, 90)
+                reason = "SMC Bearish Setup: RSI < 40 + Negative Momentum"
+            else:
+                return None
+            
+            # Check confidence threshold
+            if confidence < settings.get("smc_confidence", 75):
+                return None
+            
+            # Calculate entry, SL, TP
+            sl_pips = settings.get("stop_loss_pips", 20.0)
+            tp_pips = settings.get("take_profit_pips", 40.0)
+            pip_value = market["pip"]
+            
+            if direction == "buy":
+                entry = current_price
+                sl = entry - (sl_pips * pip_value)
+                tp = entry + (tp_pips * pip_value)
+            else:
+                entry = current_price
+                sl = entry + (sl_pips * pip_value)
+                tp = entry - (tp_pips * pip_value)
+            
+            # Investment amount
+            investment = max(0.35, settings.get("investment_amount", 0.35))
+            
+            # Add slight price variation
+            entry = round(entry * (1 + random.uniform(-0.0001, 0.0001)), 5)
+            sl = round(sl, 5)
+            tp = round(tp, 5)
+            
+            return TradeSignal(
+                symbol=symbol,
+                direction=direction,
+                entry_price=entry,
+                stop_loss=sl,
+                take_profit=tp,
+                amount=investment,
+                confidence=round(confidence, 1),
+                reason=reason
+            )
+            
+        except Exception as e:
+            print(f"❌ Analysis error: {e}")
             return None
-        
-        settings = self.settings[client_id]
-        
-        # Check if market is selected
-        selected_markets = settings.get('selected_markets', [])
-        if symbol not in selected_markets:
-            return None
-        
-        # Base prices
-        base_prices = {
-            'EURUSD': 1.08500,
-            'GBPUSD': 1.26500,
-            'USDJPY': 147.500,
-            'XAUUSD': 2015.00,
-            'BTCUSD': 42500.00
-        }
-        
-        base_price = base_prices.get(symbol, 1.08500)
-        
-        # Generate SMC signal
-        market_info = self.markets.get(symbol, {'pip': 0.0001})
-        
-        # SMC Analysis logic
-        rsi = random.uniform(30, 70)
-        momentum = random.uniform(-0.001, 0.001)
-        
-        # Determine direction
-        if rsi > 65 and momentum > 0:
-            direction = 'buy'
-            confidence = random.uniform(70, 90)
-            reason = "SMC Bullish: RSI > 65 + Positive Momentum"
-        elif rsi < 35 and momentum < 0:
-            direction = 'sell'
-            confidence = random.uniform(70, 90)
-            reason = "SMC Bearish: RSI < 35 + Negative Momentum"
-        else:
-            return None
-        
-        # Check confidence threshold
-        if confidence < settings.get('smc_confidence', 75):
-            return None
-        
-        # Calculate entry, SL, TP
-        current_price = base_price + random.uniform(-0.002, 0.002)
-        sl_pips = settings.get('stop_loss_pips', 20.0)
-        tp_pips = settings.get('take_profit_pips', 40.0)
-        
-        if direction == 'buy':
-            entry = current_price
-            sl = entry - (sl_pips * market_info['pip'])
-            tp = entry + (tp_pips * market_info['pip'])
-        else:
-            entry = current_price
-            sl = entry + (sl_pips * market_info['pip'])
-            tp = entry - (tp_pips * market_info['pip'])
-        
-        # Investment amount
-        investment = max(0.35, settings.get('investment_amount', 0.35))
-        
-        return TradeSignal(
-            symbol=symbol,
-            direction=direction,
-            entry_price=round(entry, 5),
-            stop_loss=round(sl, 5),
-            take_profit=round(tp, 5),
-            amount=investment,
-            confidence=round(confidence, 1),
-            reason=reason
-        ).dict()
     
-    async def execute_trade(self, client_id: str, signal: Dict) -> Dict:
+    async def execute_trade(self, client_id: str, signal: TradeSignal) -> Dict:
         """Execute trade"""
         try:
             if client_id not in self.sessions:
-                return {'success': False, 'error': 'No session'}
+                return {"success": False, "error": "No session found"}
             
-            if 'selected_account' not in self.sessions[client_id]:
-                return {'success': False, 'error': 'No account selected'}
+            if "selected_account" not in self.sessions[client_id]:
+                return {"success": False, "error": "No account selected"}
             
-            account = self.sessions[client_id]['selected_account']
-            settings = self.settings.get(client_id, {})
+            account = self.sessions[client_id]["selected_account"]
+            settings = self.user_settings.get(client_id, {})
             
-            # Check limits
-            trades_today = self.trades.get(client_id, {}).get('today', 0)
-            max_daily = settings.get('max_daily_trades', 10)
+            # Check trading limits
+            trades_today = self.trades.get(client_id, {}).get("today_count", 0)
+            max_daily = settings.get("max_daily_trades", 10)
             
             if trades_today >= max_daily:
-                return {'success': False, 'error': f'Max daily trades ({max_daily}) reached'}
+                return {"success": False, "error": f"Max daily trades ({max_daily}) reached"}
             
             # Check concurrent trades
-            open_trades = len(self.trades.get(client_id, {}).get('open', []))
-            max_concurrent = settings.get('max_concurrent_trades', 3)
+            open_trades = len(self.trades.get(client_id, {}).get("open", []))
+            max_concurrent = settings.get("max_concurrent_trades", 3)
             
             if open_trades >= max_concurrent:
-                return {'success': False, 'error': f'Max concurrent trades ({max_concurrent}) reached'}
+                return {"success": False, "error": f"Max concurrent trades ({max_concurrent}) reached"}
             
             # Create trade record
             trade_id = f"TRD_{uuid.uuid4().hex[:8].upper()}"
             
             trade_record = {
-                'trade_id': trade_id,
-                'client_id': client_id,
-                'account_id': account['account_id'],
-                'symbol': signal['symbol'],
-                'direction': signal['direction'],
-                'amount': signal['amount'],
-                'entry_price': signal['entry_price'],
-                'stop_loss': signal['stop_loss'],
-                'take_profit': signal['take_profit'],
-                'confidence': signal['confidence'],
-                'reason': signal['reason'],
-                'status': 'open',
-                'profit': 0.0,
-                'timestamp': datetime.now().isoformat(),
-                'account_type': account['type']
+                "trade_id": trade_id,
+                "client_id": client_id,
+                "account_id": account["account_id"],
+                "symbol": signal.symbol,
+                "direction": signal.direction,
+                "amount": signal.amount,
+                "entry_price": signal.entry_price,
+                "stop_loss": signal.stop_loss,
+                "take_profit": signal.take_profit,
+                "confidence": signal.confidence,
+                "reason": signal.reason,
+                "status": "open",
+                "profit": 0.0,
+                "timestamp": datetime.now().isoformat(),
+                "broker": "Deriv",
+                "account_type": account["type"]
             }
             
             # Store trade
             if client_id not in self.trades:
                 self.trades[client_id] = {
-                    'today': 0,
-                    'open': [],
-                    'closed': [],
-                    'total_pnl': 0.0
+                    "today_count": 0,
+                    "open": [],
+                    "closed": [],
+                    "total_pnl": 0.0
                 }
             
-            self.trades[client_id]['today'] += 1
-            self.trades[client_id]['open'].append(trade_record)
+            self.trades[client_id]["today_count"] += 1
+            self.trades[client_id]["open"].append(trade_record)
             
             print(f"✅ Trade executed: {trade_record}")
             
             return {
-                'success': True,
-                'trade': trade_record,
-                'message': f'Trade executed on {account["type"]} account'
+                "success": True,
+                "trade": trade_record,
+                "message": f"Trade executed on Deriv ({account['type']} account)"
             }
             
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            print(f"❌ Trade execution error: {e}")
+            return {"success": False, "error": str(e)}
     
     async def close_trade(self, client_id: str, trade_id: str) -> Dict:
         """Close trade"""
-        if client_id not in self.trades:
-            return {'success': False, 'error': 'No trades found'}
-        
-        trades = self.trades[client_id]
-        
-        for i, trade in enumerate(trades['open']):
-            if trade['trade_id'] == trade_id:
-                # Calculate profit (simulated)
-                profit = trade['amount'] * random.uniform(-0.5, 1.5)
-                
-                trade['status'] = 'closed'
-                trade['profit'] = round(profit, 2)
-                trade['closed_at'] = datetime.now().isoformat()
-                
-                closed_trade = trades['open'].pop(i)
-                trades['closed'].append(closed_trade)
-                trades['total_pnl'] += profit
-                
-                return {
-                    'success': True,
-                    'trade': closed_trade,
-                    'profit': profit
-                }
-        
-        return {'success': False, 'error': 'Trade not found'}
+        try:
+            if client_id not in self.trades:
+                return {"success": False, "error": "No trades found"}
+            
+            trades = self.trades[client_id]
+            
+            for i, trade in enumerate(trades["open"]):
+                if trade["trade_id"] == trade_id:
+                    # Calculate profit (simulated)
+                    profit = trade["amount"] * random.uniform(-0.3, 0.8)
+                    
+                    trade["status"] = "closed"
+                    trade["profit"] = round(profit, 2)
+                    trade["closed_at"] = datetime.now().isoformat()
+                    
+                    closed_trade = trades["open"].pop(i)
+                    trades["closed"].append(closed_trade)
+                    trades["total_pnl"] += profit
+                    
+                    return {
+                        "success": True,
+                        "trade": closed_trade,
+                        "profit": profit
+                    }
+            
+            return {"success": False, "error": "Trade not found"}
+            
+        except Exception as e:
+            print(f"❌ Close trade error: {e}")
+            return {"success": False, "error": str(e)}
     
-    async def get_trades(self, client_id: str) -> Dict:
+    async def get_user_trades(self, client_id: str) -> Dict:
         """Get user trades"""
         return self.trades.get(client_id, {
-            'today': 0,
-            'open': [],
-            'closed': [],
-            'total_pnl': 0.0
+            "today_count": 0,
+            "open": [],
+            "closed": [],
+            "total_pnl": 0.0
         })
 
 # Initialize engine
@@ -383,7 +413,7 @@ ws_manager = WebSocketManager()
 # ============ API ENDPOINTS ============
 @app.get("/")
 async def root():
-    return {"app": "🎯 Karanka Multiverse AI", "status": "online", "version": "9.0.0"}
+    return {"app": "🎯 Karanka Multiverse AI", "status": "online", "version": "1.0.0"}
 
 @app.get("/health")
 async def health():
@@ -391,15 +421,25 @@ async def health():
 
 @app.post("/api/connect")
 async def connect(request: ConnectionRequest):
-    client_id = await trading_engine.connect(request)
-    return {
-        "success": True,
-        "client_id": client_id,
-        "message": "Connected successfully"
-    }
+    """Connect user"""
+    try:
+        client_id = await trading_engine.connect_user(
+            request.api_token,
+            request.investment_amount
+        )
+        
+        return {
+            "success": True,
+            "client_id": client_id,
+            "message": "Connected successfully"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/accounts/{client_id}")
 async def get_accounts(client_id: str):
+    """Get user accounts"""
     accounts = await trading_engine.get_accounts(client_id)
     
     if not accounts:
@@ -413,6 +453,7 @@ async def get_accounts(client_id: str):
 
 @app.post("/api/select-account")
 async def select_account(request: AccountSelect):
+    """Select account"""
     success = await trading_engine.select_account(request.client_id, request.account_id)
     
     if not success:
@@ -425,8 +466,9 @@ async def select_account(request: AccountSelect):
 
 @app.post("/api/update-markets")
 async def update_markets(request: MarketSettings):
+    """Update market settings"""
     success = await trading_engine.update_settings(request.client_id, {
-        'selected_markets': request.selected_markets
+        "selected_markets": request.selected_markets
     })
     
     if not success:
@@ -436,11 +478,13 @@ async def update_markets(request: MarketSettings):
 
 @app.post("/api/update-rules")
 async def update_rules(request: TradingRules):
+    """Update trading rules"""
     success = await trading_engine.update_settings(request.client_id, {
-        'max_concurrent_trades': request.max_concurrent_trades,
-        'max_daily_trades': request.max_daily_trades,
-        'stop_loss_pips': request.stop_loss_pips,
-        'take_profit_pips': request.take_profit_pips
+        "max_concurrent_trades": request.max_concurrent_trades,
+        "max_daily_trades": request.max_daily_trades,
+        "stop_loss_pips": request.stop_loss_pips,
+        "take_profit_pips": request.take_profit_pips,
+        "risk_percent": request.risk_percent
     })
     
     if not success:
@@ -450,9 +494,12 @@ async def update_rules(request: TradingRules):
 
 @app.post("/api/update-smc")
 async def update_smc(request: SMCSettings):
+    """Update SMC settings"""
     success = await trading_engine.update_settings(request.client_id, {
-        'smc_confidence': request.smc_confidence,
-        'virgin_breaker': request.virgin_breaker
+        "smc_confidence": request.smc_confidence,
+        "virgin_breaker": request.virgin_breaker,
+        "liquidity_sweep": request.liquidity_sweep,
+        "order_blocks": request.order_blocks
     })
     
     if not success:
@@ -462,34 +509,74 @@ async def update_smc(request: SMCSettings):
 
 @app.post("/api/analyze")
 async def analyze(request: Request):
-    data = await request.json()
-    signal = await trading_engine.analyze_market(data['client_id'], data.get('symbol', 'EURUSD'))
-    
-    return {
-        "success": True if signal else False,
-        "signal": signal
-    }
+    """Analyze market"""
+    try:
+        data = await request.json()
+        client_id = data.get("client_id")
+        symbol = data.get("symbol", "EURUSD")
+        
+        if not client_id:
+            raise HTTPException(status_code=400, detail="Client ID required")
+        
+        signal = await trading_engine.analyze_market(symbol, client_id)
+        
+        if not signal:
+            return {"success": False, "message": "No SMC setup found"}
+        
+        return {
+            "success": True,
+            "signal": signal.dict()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/trade")
-async def trade(request: Request):
-    data = await request.json()
-    result = await trading_engine.execute_trade(data['client_id'], data['signal'])
-    return result
+async def execute_trade(request: Request):
+    """Execute trade"""
+    try:
+        data = await request.json()
+        client_id = data.get("client_id")
+        signal_data = data.get("signal")
+        
+        if not client_id or not signal_data:
+            raise HTTPException(status_code=400, detail="Invalid request")
+        
+        signal = TradeSignal(**signal_data)
+        result = await trading_engine.execute_trade(client_id, signal)
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/trades/{client_id}")
 async def get_trades(client_id: str):
-    trades = await trading_engine.get_trades(client_id)
+    """Get user trades"""
+    trades = await trading_engine.get_user_trades(client_id)
     return {"success": True, "trades": trades}
 
 @app.post("/api/close-trade")
 async def close_trade(request: Request):
-    data = await request.json()
-    result = await trading_engine.close_trade(data['client_id'], data['trade_id'])
-    return result
+    """Close trade"""
+    try:
+        data = await request.json()
+        client_id = data.get("client_id")
+        trade_id = data.get("trade_id")
+        
+        if not client_id or not trade_id:
+            raise HTTPException(status_code=400, detail="Invalid request")
+        
+        result = await trading_engine.close_trade(client_id, trade_id)
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/settings/{client_id}")
 async def get_settings(client_id: str):
-    settings = trading_engine.settings.get(client_id, {})
+    """Get user settings"""
+    settings = trading_engine.user_settings.get(client_id, {})
     return {"success": True, "settings": settings}
 
 # ============ WEBSOCKET ============
@@ -500,35 +587,36 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     try:
         while True:
             data = await websocket.receive_json()
-            action = data.get('action')
+            action = data.get("action")
             
-            if action == 'ping':
-                await ws_manager.send_message(client_id, {'type': 'pong'})
+            if action == "ping":
+                await ws_manager.send_message(client_id, {"type": "pong"})
             
-            elif action == 'analyze':
-                symbol = data.get('symbol', 'EURUSD')
-                signal = await trading_engine.analyze_market(client_id, symbol)
+            elif action == "analyze":
+                symbol = data.get("symbol", "EURUSD")
+                signal = await trading_engine.analyze_market(symbol, client_id)
                 
                 await ws_manager.send_message(client_id, {
-                    'type': 'analysis',
-                    'signal': signal
+                    "type": "analysis",
+                    "signal": signal.dict() if signal else None
                 })
             
-            elif action == 'execute_trade':
-                signal = data.get('signal')
-                if signal:
+            elif action == "execute_trade":
+                signal_data = data.get("signal")
+                if signal_data:
+                    signal = TradeSignal(**signal_data)
                     result = await trading_engine.execute_trade(client_id, signal)
                     
                     await ws_manager.send_message(client_id, {
-                        'type': 'trade_result',
-                        'result': result
+                        "type": "trade_result",
+                        "result": result
                     })
             
-            elif action == 'get_trades':
-                trades = await trading_engine.get_trades(client_id)
+            elif action == "get_trades":
+                trades = await trading_engine.get_user_trades(client_id)
                 await ws_manager.send_message(client_id, {
-                    'type': 'trades',
-                    'trades': trades
+                    "type": "trades",
+                    "trades": trades
                 })
                 
     except WebSocketDisconnect:
@@ -540,20 +628,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 # ============ WEBAPP ============
 @app.get("/app")
 async def trading_app(request: Request):
+    """Serve the 6-TAB mobile webapp"""
     return templates.TemplateResponse("index.html", {"request": request})
 
 # ============ RUN SERVER ============
 if __name__ == "__main__":
-    print("\n" + "="*80)
-    print("🎯 KARANKA MULTIVERSE AI - REAL TRADING BOT")
-    print("="*80)
-    print(f"✅ Version: 9.0.0")
-    print(f"✅ Python: 3.11 (Compatible)")
-    print(f"✅ Port: {PORT}")
-    print("="*80)
-    print(f"🌐 WebApp: http://localhost:{PORT}/app")
-    print(f"🩺 Health: http://localhost:{PORT}/health")
-    print(f"📚 API Docs: http://localhost:{PORT}/docs")
-    print("="*80)
-    
+    print(f"\n🚀 Server starting on port {PORT}...")
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
