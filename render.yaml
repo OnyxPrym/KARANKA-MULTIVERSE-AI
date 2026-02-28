@@ -2,14 +2,10 @@ services:
   - type: web
     name: karanka-multiverse-ai
     runtime: python
-    region: oregon
-    buildCommand: |
-      pip install --upgrade pip
-      pip install setuptools wheel
-      pip install -r requirements.txt
-    startCommand: gunicorn -k eventlet -w 1 app:app
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.18
+        value: 3.8.18
     healthCheckPath: /ping
     autoDeploy: true
