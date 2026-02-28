@@ -1,15 +1,8 @@
 services:
   - type: web
     name: karanka-multiverse-ai
-    runtime: docker
-    region: oregon
-    healthCheckPath: /ping
-    autoDeploy: true
-services:
-  - type: web
-    name: karanka-multiverse-ai
     runtime: python
-    region: oregon  # Optional: choose closest region
+    region: oregon
     buildCommand: |
       pip install --upgrade pip
       pip install setuptools wheel
@@ -17,8 +10,6 @@ services:
     startCommand: gunicorn -k eventlet -w 1 app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: PIP_NO_CACHE_DIR
-        value: 1
+        value: 3.9.18
     healthCheckPath: /ping
     autoDeploy: true
