@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Karanka Algo Deriv Matrix AI Trader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="theme-color" content="#000000">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="gold-header">
+            <div class="logo-container">
+                <h1 class="logo-text">KARANKA<span class="algo-text">.ALGO</span></h1>
+                <div class="badge">MATRIX AI v1.0</div>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Main Navigation Tabs -->
+        <div class="tabs-container">
+            <button class="tab-btn active" data-tab="connect">🔌 CONNECT</button>
+            <button class="tab-btn" data-tab="market">📊 MARKET</button>
+            <button class="tab-btn" data-tab="settings">⚙️ SETTINGS</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- CONNECT TAB -->
+            <div class="tab-pane active" id="connect-tab">
+                <div class="card gold-border">
+                    <h2 class="card-title">🔐 Connect to Deriv</h2>
+                    <p class="info-text">Enter your Deriv API token to connect your trading account</p>
+                    
+                    <div class="input-group">
+                        <label>API Token</label>
+                        <input type="password" id="apiToken" placeholder="Enter your Deriv API token" class="gold-input">
+                    </div>
+                    
+                    <div class="info-box">
+                        <strong>How to get your API token:</strong>
+                        <ol>
+                            <li>Log in to your Deriv account</li>
+                            <li>Go to Settings → API Token</li>
+                            <li>Create new token with "Trade" permissions</li>
+                            <li>Copy and paste it here</li>
+                        </ol>
+                    </div>
+                    
+                    <button class="btn-gold" id="connectBtn" onclick="connectToDeriv()">
+                        <span class="btn-text">CONNECT TO DERIV</span>
+                        <span class="btn-loader" style="display: none;">⏳</span>
+                    </button>
+                </div>
+                
+                <div class="card black-card" id="accountInfo" style="display: none;">
+                    <h3 class="card-subtitle">📋 Account Information</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Account:</span>
+                            <span class="info-value" id="accountId">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Balance:</span>
+                            <span class="info-value gold-text" id="accountBalance">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Currency:</span>
+                            <span class="info-value" id="accountCurrency">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Name:</span>
+                            <span class="info-value" id="accountName">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MARKET TAB -->
+            <div class="tab-pane" id="market-tab">
+                <div class="card gold-border">
+                    <h2 class="card-title">📈 Market Selection</h2>
+                    
+                    <div class="input-group">
+                        <label>Select Symbol</label>
+                        <select id="symbolSelect" class="gold-select">
+                            <option value="R_100">R_100 (Volatility 100)</option>
+                            <option value="R_75">R_75 (Volatility 75)</option>
+                            <option value="R_50">R_50 (Volatility 50)</option>
+                            <option value="R_25">R_25 (Volatility 25)</option>
+                            <option value="1HZ100V">1HZ100V (Volatility 100)</option>
+                            <option value="1HZ75V">1HZ75V (Volatility 75)</option>
+                            <option value="1HZ50V" selected>1HZ50V (Volatility 50)</option>
+                            <option value="1HZ25V">1HZ25V (Volatility 25)</option>
+                            <option value="1HZ10V">1HZ10V (Volatility 10)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Chosen Digit (2-7 recommended)</label>
+                        <input type="number" id="chosenDigit" min="0" max="9" value="5" class="gold-input">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Trade Duration (ticks)</label>
+                        <input type="number" id="duration" min="1" max="10" value="1" class="gold-input">
+                    </div>
+                    
+                    <div class="info-box">
+                        <strong>💡 Strategy Info:</strong> Bot trades DIGITOVER/DIGITUNDER based on chosen digit. Higher volatility = more opportunities but higher risk.
+                    </div>
+                </div>
+                
+                <div class="card black-card">
+                    <h3 class="card-subtitle">📊 Live Market Data</h3>
+                    <div id="marketData">
+                        <p class="text-muted">Connect and start bot to see live data</p>
+                    </div>
+                    <div class="stats-grid" id="liveStats" style="display: none;">
+                        <div class="stat-box">
+                            <span class="stat-label">Last Digit</span>
+                            <span class="stat-value" id="lastDigit">-</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Confidence</span>
+                            <span class="stat-value" id="confidenceScore">0%</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Pattern Pos</span>
+                            <span class="stat-value" id="patternPos">1</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS TAB -->
+            <div class="tab-pane" id="settings-tab">
+                <div class="card gold-border">
+                    <h2 class="card-title">⚙️ Trading Parameters</h2>
+                    
+                    <div class="input-group">
+                        <label>Initial Stake ($)</label>
+                        <input type="number" id="initialStake" min="0.35" step="0.01" value="0.50" class="gold-input">
+                        <small class="input-hint">Minimum: $0.35</small>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Max Concurrent Trades</label>
+                        <input type="number" id="maxTrades" min="1" max="5" value="1" class="gold-input">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Trading Duration (hours)</label>
+                        <input type="number" id="tradeHours" min="0.5" step="0.5" value="2" class="gold-input">
+                        <small class="input-hint">0 = unlimited</small>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Confidence Threshold (%)</label>
+                        <input type="number" id="confidenceThreshold" min="50" max="90" value="65" class="gold-input">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Recovery Factor</label>
+                        <select id="recoveryFactor" class="gold-select">
+                            <option value="0.25">Conservative (0.25x)</option>
+                            <option value="0.5" selected>Moderate (0.5x)</option>
+                            <option value="1.0">Aggressive (1.0x)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="info-box warning">
+                        <strong>⚠️ Risk Warning:</strong> Higher recovery factor increases risk of large drawdowns. Start with conservative settings.
+                    </div>
+                </div>
+                
+                <div class="card black-card">
+                    <h3 class="card-subtitle">📈 Bot Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Trades:</span>
+                            <span class="stat-value" id="statTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Wins:</span>
+                            <span class="stat-value gold-text" id="statWins">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Losses:</span>
+                            <span class="stat-value" id="statLosses">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Win Rate:</span>
+                            <span class="stat-value" id="statWinRate">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total P/L:</span>
+                            <span class="stat-value gold-text" id="statProfit">$0.00</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Current Stake:</span>
+                            <span class="stat-value" id="statCurrentStake">$0.50</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel (Fixed Bottom) -->
+        <div class="control-panel">
+            <div class="bot-status" id="botStatus">
+                <span class="status-indicator"></span>
+                <span>Bot Stopped</span>
+            </div>
+            <div class="control-buttons">
+                <button class="btn-control start" id="startBotBtn" onclick="startBot()" disabled>
+                    ▶ START
+                </button>
+                <button class="btn-control stop" id="stopBotBtn" onclick="stopBot()" disabled>
+                    ⏹ STOP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
