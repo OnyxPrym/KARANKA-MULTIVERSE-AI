@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: karanka-algo-trader
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18.x
+      - key: PORT
+        value: 10000
+      - key: DERIV_APP_ID
+        value: YOUR_APP_ID_HERE
+    healthCheckPath: /health
+    autoDeploy: true
